@@ -233,6 +233,8 @@ Useful endpoints:
 - `GET /reports`
 - `GET /reports/{filename}`
 
+AssureBench includes prototype in-memory rate limiting for high-cost routes such as assurance runs and report exports. This is suitable for local/demo deployments. For production or multi-instance deployments, this should be replaced with Redis-backed or gateway-level distributed rate limiting.
+
 ## How to Run Frontend
 
 Open a second terminal:

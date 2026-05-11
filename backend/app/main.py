@@ -1,11 +1,11 @@
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 
-from . import sample_tests, evaluator, ml_risk, demo_chatbot, reports, test_runner
+from . import sample_tests, evaluator, ml_risk, demo_chatbot, reports, test_runner, rate_limiter
 
 app = FastAPI(title="AssureBench API", version="0.1.0")
 
@@ -47,7 +47,11 @@ class ReportRequest(BaseModel):
 async def health_check():
     return {"status": "ok", "service": "AssureBench"}
 
-@app.post("/runs", response_model=RunResponse)
+@app.post(
+    "/runs",
+    response_model=RunResponse,
+    dependencies=[Depends(rate_limiter.rate_limit_dependency("/runs"))],
+)
 async def run_tests(request: RunRequest):
     try:
         test_definitions = sample_tests.get_sample_tests()
@@ -66,14 +70,20 @@ async def run_tests(request: RunRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-@app.post("/reports/json")
+@app.post(
+    "/reports/json",
+    dependencies=[Depends(rate_limiter.rate_limit_dependency("/reports/json"))],
+)
 async def export_json_report(request: ReportRequest):
     try:
         return reports.export_json_report(request.model_dump())
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-@app.post("/reports/pdf")
+@app.post(
+    "/reports/pdf",
+    dependencies=[Depends(rate_limiter.rate_limit_dependency("/reports/pdf"))],
+)
 async def export_pdf_report(request: ReportRequest):
     try:
         return reports.export_pdf_report(request.model_dump())
