@@ -13,6 +13,20 @@ async def _request(method, path, **kwargs):
         return await getattr(client, method)(path, **kwargs)
 
 
+def test_auth_db_path_defaults_to_local_db(monkeypatch):
+    monkeypatch.delenv("ASSUREBENCH_DATA_DIR", raising=False)
+
+    assert auth.get_auth_db_path() == auth.DB_PATH
+
+
+def test_auth_db_path_uses_data_dir(monkeypatch, tmp_path):
+    data_dir = tmp_path / "assurebench-data"
+    monkeypatch.setenv("ASSUREBENCH_DATA_DIR", str(data_dir))
+
+    assert auth.get_auth_db_path() == data_dir.resolve() / "assurebench_auth.db"
+    assert data_dir.exists()
+
+
 def test_owner_account_is_created_from_env_when_no_users_exist():
     users = auth.list_users()
 

@@ -41,9 +41,19 @@ def load_local_env(override: bool = True) -> None:
             os.environ.setdefault(clean_key, clean_value)
 
 
+def get_auth_db_path() -> Path:
+    data_dir = os.getenv("ASSUREBENCH_DATA_DIR")
+    if data_dir:
+        path = Path(data_dir).expanduser().resolve()
+        path.mkdir(parents=True, exist_ok=True)
+        return path / "assurebench_auth.db"
+    return DB_PATH
+
+
 def _connect() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(DB_PATH)
+    db_path = get_auth_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     return connection
 
@@ -157,7 +167,7 @@ def _owner_env_values() -> Dict[str, str]:
 
 def log_auth_startup_state(owner_email: str) -> None:
     safe_lines = [
-        f"Auth database path: {DB_PATH}",
+        f"Auth database path: {get_auth_db_path()}",
         f"backend/.env present: {ENV_PATH.exists()}",
         f"ASSUREBENCH_OWNER_NAME present: {bool(os.getenv('ASSUREBENCH_OWNER_NAME'))}",
         f"ASSUREBENCH_OWNER_EMAIL present: {bool(owner_email)}",

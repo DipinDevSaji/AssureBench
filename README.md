@@ -368,9 +368,14 @@ ASSUREBENCH_OWNER_EMAIL=owner@example.com
 ASSUREBENCH_OWNER_PASSWORD=change-this-password
 ASSUREBENCH_JWT_SECRET=change-this-secret
 ASSUREBENCH_ALLOWED_ORIGINS=https://your-vercel-app.vercel.app
+ASSUREBENCH_DATA_DIR=/data
 ```
 
 Do not commit real credentials. `backend/.env.example` contains safe local placeholders only.
+
+If `ASSUREBENCH_DATA_DIR` is set, AssureBench stores the SQLite auth database at `ASSUREBENCH_DATA_DIR/assurebench_auth.db` and generated reports under `ASSUREBENCH_DATA_DIR/reports`. If it is not set, local development keeps the default project-local database and reports folder behavior.
+
+The free Hugging Face Spaces disk is suitable for demo/testing deployments, but it should not be treated as reliable permanent user data storage. Production deployments should use attached persistent storage, Postgres or another managed database for accounts, and object storage for reports.
 
 After deployment, confirm the backend is reachable by checking:
 

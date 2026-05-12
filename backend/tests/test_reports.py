@@ -17,6 +17,22 @@ ALL_CATEGORIES = {
 }
 
 
+def test_reports_dir_defaults_to_local_reports(monkeypatch):
+    monkeypatch.delenv("ASSUREBENCH_DATA_DIR", raising=False)
+
+    assert reports._get_reports_dir() == reports.Path(__file__).resolve().parents[2] / "reports"
+
+
+def test_reports_dir_uses_data_dir_and_creates_folder(monkeypatch, tmp_path):
+    data_dir = tmp_path / "assurebench-data"
+    monkeypatch.setenv("ASSUREBENCH_DATA_DIR", str(data_dir))
+
+    reports_dir = reports._get_reports_dir()
+
+    assert reports_dir == data_dir.resolve() / "reports"
+    assert reports_dir.exists()
+
+
 def test_recommendations_exist_for_all_categories():
     evaluation = {category: 1.0 for category in ALL_CATEGORIES}
 

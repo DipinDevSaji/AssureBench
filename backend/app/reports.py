@@ -1,6 +1,7 @@
 """Builds structured reports for AI assurance runs."""
 
 import json
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -341,7 +342,11 @@ def get_failed_or_risky_tests(details: List[Dict], evaluation: Dict[str, float])
 
 
 def _get_reports_dir() -> Path:
-    reports_dir = Path(__file__).resolve().parents[2] / "reports"
+    data_dir = os.getenv("ASSUREBENCH_DATA_DIR")
+    if data_dir:
+        reports_dir = Path(data_dir).expanduser().resolve() / "reports"
+    else:
+        reports_dir = Path(__file__).resolve().parents[2] / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
     return reports_dir
 
