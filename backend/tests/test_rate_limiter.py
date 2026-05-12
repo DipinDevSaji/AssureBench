@@ -43,12 +43,12 @@ def _patch_report_exports(monkeypatch):
     monkeypatch.setattr(
         main.reports,
         "export_json_report",
-        lambda payload: {"message": "Report exported successfully", "filename": "test.json", "path": "reports/test.json"},
+        lambda payload, current_user=None: {"message": "Report exported successfully", "filename": "test.json", "path": "reports/test.json"},
     )
     monkeypatch.setattr(
         main.reports,
         "export_pdf_report",
-        lambda payload: {"message": "PDF report exported successfully", "filename": "test.pdf", "path": "reports/test.pdf"},
+        lambda payload, current_user=None: {"message": "PDF report exported successfully", "filename": "test.pdf", "path": "reports/test.pdf"},
     )
 
 

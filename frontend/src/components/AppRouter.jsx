@@ -115,6 +115,24 @@ function AppRouter({
   user,
   onUserUpdated,
 }) {
+  const canAccessAdmin = ["owner", "admin"].includes(user?.role);
+
+  if (activeNav === "Admin Users" && !canAccessAdmin) {
+    return (
+      <Overview
+        configuredTestCount={configuredTestCount}
+        currentTargetLabel={currentTargetLabel}
+        hasRun={hasRun}
+        onOpenCustomEndpoint={() => setActiveNav("Production Endpoint")}
+        onOpenDemo={() => setActiveNav("Demo Chatbot")}
+        onOpenNewRun={() => setActiveNav("New Run")}
+        onOpenTestSuites={() => setActiveNav("Test Suites")}
+        stats={stats}
+        testSuites={testSuites}
+      />
+    );
+  }
+
   if (activeNav === "Overview") {
     return (
       <Overview

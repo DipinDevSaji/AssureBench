@@ -167,7 +167,7 @@ function Reports({ refreshKey }) {
         <div className="reports-empty">
           {status === "loading"
             ? "Loading exported reports..."
-            : "No reports yet. Run an assurance test to generate JSON/PDF evidence reports."}
+            : "No reports yet. Run an assurance test to generate your first evidence report."}
         </div>
       ) : null}
 
@@ -219,6 +219,7 @@ function Reports({ refreshKey }) {
                           <td>
                             {metadataAvailable ? (
                               <div className="report-metadata-grid">
+                                {report.legacy ? <span>Legacy report</span> : null}
                                 {report.risk_score !== null && report.risk_score !== undefined ? (
                                   <span>Score {report.risk_score}</span>
                                 ) : null}
@@ -234,7 +235,7 @@ function Reports({ refreshKey }) {
                                 ) : null}
                               </div>
                             ) : (
-                              <span className="metadata-badge">Metadata unavailable</span>
+                              <span className="metadata-badge">{report.legacy ? "Legacy report" : "Metadata unavailable"}</span>
                             )}
                           </td>
                           <td>

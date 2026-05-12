@@ -135,6 +135,14 @@ def test_public_cannot_create_accounts():
     assert response.status_code == 401
 
 
+def test_unauthenticated_visitor_cannot_access_admin_endpoints():
+    users_response = asyncio.run(_request("get", "/admin/users"))
+    access_requests_response = asyncio.run(_request("get", "/admin/access-requests"))
+
+    assert users_response.status_code == 401
+    assert access_requests_response.status_code == 401
+
+
 def test_protected_route_rejects_missing_token():
     response = asyncio.run(_request("get", "/reports"))
 
@@ -174,6 +182,13 @@ def test_owner_can_create_admin(admin_headers):
     assert payload["email"] == "trusted@example.com"
     assert payload["role"] == "admin"
     assert "password_hash" not in payload
+
+
+def test_owner_can_list_admin_users(admin_headers):
+    response = asyncio.run(_request("get", "/admin/users", headers=admin_headers))
+
+    assert response.status_code == 200
+    assert response.json()["users"][0]["role"] == "owner"
 
 
 def test_owner_can_create_user(admin_headers):
@@ -256,6 +271,15 @@ def test_admin_can_create_user():
 
     assert response.status_code == 200
     assert response.json()["role"] == "user"
+
+
+def test_admin_can_list_admin_users():
+    admin_headers, _ = _token_for_user("Trusted Admin", "list-admin@example.com", "admin")
+
+    response = asyncio.run(_request("get", "/admin/users", headers=admin_headers))
+
+    assert response.status_code == 200
+    assert any(user["email"] == "list-admin@example.com" for user in response.json()["users"])
 
 
 def test_admin_cannot_create_admin():
@@ -362,6 +386,29 @@ def test_user_cannot_access_admin_endpoints():
     response = asyncio.run(_request("get", "/admin/users", headers=user_headers))
 
     assert response.status_code == 403
+
+
+def test_user_cannot_manage_accounts_or_access_requests():
+    user_headers, user = _token_for_user("Customer", "blocked-customer@example.com", "user")
+
+    create_response = asyncio.run(
+        _request(
+            "post",
+            "/admin/users",
+            headers=user_headers,
+            json={"name": "Blocked", "email": "blocked-user@example.com", "password": "temporary-password", "role": "user"},
+        )
+    )
+    deactivate_response = asyncio.run(_request("delete", f"/admin/users/{user['id']}", headers=user_headers))
+    reactivate_response = asyncio.run(
+        _request("patch", f"/admin/users/{user['id']}", headers=user_headers, json={"is_active": True})
+    )
+    access_requests_response = asyncio.run(_request("get", "/admin/access-requests", headers=user_headers))
+
+    assert create_response.status_code == 403
+    assert deactivate_response.status_code == 403
+    assert reactivate_response.status_code == 403
+    assert access_requests_response.status_code == 403
 
 
 def _access_request_payload():

@@ -4,7 +4,7 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -346,6 +346,56 @@ def _get_reports_dir() -> Path:
     return reports_dir
 
 
+def _is_privileged_user(user: Optional[Dict]) -> bool:
+    return bool(user and user.get("role") in {"owner", "admin"})
+
+
+def _owner_metadata(user: Optional[Dict]) -> Dict:
+    if not user:
+        return {}
+    return {
+        "owner_user_id": user.get("id"),
+        "owner_email": user.get("email"),
+        "owner_role": user.get("role"),
+    }
+
+
+def _get_user_reports_dir(user: Optional[Dict]) -> Path:
+    if not user or not user.get("id"):
+        return _get_reports_dir()
+    reports_dir = _get_reports_dir() / str(user["id"])
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    return reports_dir
+
+
+def _public_report_path(path: Path) -> str:
+    try:
+        relative_path = path.relative_to(_get_reports_dir())
+        return str(Path("reports") / relative_path).replace("\\", "/")
+    except ValueError:
+        return f"reports/{path.name}"
+
+
+def _iter_report_paths_for_user(user: Optional[Dict]) -> List[Path]:
+    reports_dir = _get_reports_dir()
+    if _is_privileged_user(user):
+        roots = [reports_dir, *[path for path in reports_dir.iterdir() if path.is_dir()]]
+    elif user:
+        user_dir = reports_dir / str(user["id"])
+        roots = [user_dir] if user_dir.exists() else []
+    else:
+        roots = []
+
+    report_paths = []
+    for root in roots:
+        report_paths.extend(
+            path
+            for path in root.glob("assurebench_report_*.*")
+            if path.is_file() and path.suffix.lower() in {".json", ".pdf"}
+        )
+    return report_paths
+
+
 def _get_run_metadata(run_result: Dict) -> Dict:
     summary = run_result.get("summary") or {}
     risk_score = float(summary.get("risk_score") or 0)
@@ -421,6 +471,7 @@ def _read_json_report_metadata(path: Path) -> Dict:
     summary = data.get("summary") or {}
     total_tests = int(summary.get("test_count") or len(data.get("details") or []))
     risky_tests = len(data.get("failed_or_risky_tests") or [])
+    owner = data.get("owner") or {}
 
     return {
         "run_id": data.get("run_id") or _parse_run_id_from_filename(path.name),
@@ -429,15 +480,14 @@ def _read_json_report_metadata(path: Path) -> Dict:
         "total_tests": total_tests,
         "passed_tests": max(0, total_tests - risky_tests),
         "risky_tests": risky_tests,
+        "owner_user_id": owner.get("user_id") or data.get("owner_user_id"),
+        "owner_email": owner.get("email") or data.get("owner_email"),
+        "legacy": not bool(owner or data.get("owner_user_id") or data.get("owner_email")),
     }
 
 
-def list_exported_reports() -> List[Dict]:
-    report_paths = [
-        path
-        for path in _get_reports_dir().glob("assurebench_report_*.*")
-        if path.suffix.lower() in {".json", ".pdf"}
-    ]
+def list_exported_reports(current_user: Optional[Dict] = None) -> List[Dict]:
+    report_paths = _iter_report_paths_for_user(current_user)
     metadata_by_run_id = {}
     for path in report_paths:
         if path.suffix.lower() != ".json":
@@ -446,14 +496,14 @@ def list_exported_reports() -> List[Dict]:
         try:
             metadata = _read_json_report_metadata(path)
             if metadata.get("run_id"):
-                metadata_by_run_id[metadata["run_id"]] = metadata
+                metadata_by_run_id[(path.parent, metadata["run_id"])] = metadata
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             continue
 
     reports = []
     for path in sorted(report_paths, key=lambda item: item.stat().st_mtime, reverse=True):
         run_id = _parse_run_id_from_filename(path.name)
-        metadata = metadata_by_run_id.get(run_id, {})
+        metadata = metadata_by_run_id.get((path.parent, run_id), {})
 
         report = {
             "filename": path.name,
@@ -467,6 +517,9 @@ def list_exported_reports() -> List[Dict]:
             "total_tests": metadata.get("total_tests"),
             "passed_tests": metadata.get("passed_tests"),
             "risky_tests": metadata.get("risky_tests"),
+            "owner_user_id": metadata.get("owner_user_id"),
+            "owner_email": metadata.get("owner_email"),
+            "legacy": bool(metadata.get("legacy")) or path.parent == _get_reports_dir(),
         }
 
         reports.append(report)
@@ -474,28 +527,33 @@ def list_exported_reports() -> List[Dict]:
     return reports
 
 
-def get_exported_report_path(filename: str) -> Path:
+def get_exported_report_path(filename: str, current_user: Optional[Dict] = None) -> Path:
     if "/" in filename or "\\" in filename or ".." in filename or Path(filename).name != filename:
         raise ValueError("Invalid report filename")
 
-    path = _get_reports_dir() / filename
+    candidate_paths = [path for path in _iter_report_paths_for_user(current_user) if path.name == filename]
+    if not candidate_paths:
+        raise FileNotFoundError(filename)
+
+    path = candidate_paths[0]
     if not path.exists() or not path.is_file() or path.suffix.lower() not in {".json", ".pdf"}:
         raise FileNotFoundError(filename)
 
     return path
 
 
-def delete_exported_report(filename: str) -> Dict:
-    path = get_exported_report_path(filename)
+def delete_exported_report(filename: str, current_user: Optional[Dict] = None) -> Dict:
+    path = get_exported_report_path(filename, current_user)
     path.unlink()
     return {"message": "Report deleted successfully", "filename": filename}
 
 
-def export_json_report(run_result: Dict) -> Dict:
+def export_json_report(run_result: Dict, current_user: Optional[Dict] = None) -> Dict:
     metadata = _get_run_metadata(run_result)
     summary = metadata["summary"]
     evaluation = metadata["evaluation"]
     details = metadata["details"]
+    owner = _owner_metadata(current_user)
 
     report = {
         "run_id": metadata["run_id"],
@@ -503,6 +561,11 @@ def export_json_report(run_result: Dict) -> Dict:
         "generated_at": metadata["generated_at"],
         "risk_score": metadata["risk_score"],
         "risk_level": metadata["risk_level"],
+        "owner": {
+            "user_id": owner.get("owner_user_id"),
+            "email": owner.get("owner_email"),
+            "role": owner.get("owner_role"),
+        },
         "summary": summary,
         "recommendations": run_result.get("recommendations") or build_recommendations(evaluation),
         "details": details,
@@ -510,7 +573,7 @@ def export_json_report(run_result: Dict) -> Dict:
     }
 
     filename = f"assurebench_report_{metadata['safe_run_id']}_{metadata['timestamp']}.json"
-    path = _get_reports_dir() / filename
+    path = _get_user_reports_dir(current_user) / filename
 
     with path.open("w", encoding="utf-8") as file:
         json.dump(report, file, indent=2)
@@ -518,11 +581,11 @@ def export_json_report(run_result: Dict) -> Dict:
     return {
         "message": "Report exported successfully",
         "filename": filename,
-        "path": str(path),
+        "path": _public_report_path(path),
     }
 
 
-def export_pdf_report(run_result: Dict) -> Dict:
+def export_pdf_report(run_result: Dict, current_user: Optional[Dict] = None) -> Dict:
     metadata = _get_run_metadata(run_result)
     summary = metadata["summary"]
     evaluation = metadata["evaluation"]
@@ -536,7 +599,7 @@ def export_pdf_report(run_result: Dict) -> Dict:
     category_breakdown = _get_category_breakdown(details, evaluation)
 
     filename = f"assurebench_report_{metadata['safe_run_id']}_{metadata['timestamp']}.pdf"
-    path = _get_reports_dir() / filename
+    path = _get_user_reports_dir(current_user) / filename
 
     styles = getSampleStyleSheet()
     risky_header_style = ParagraphStyle(
@@ -689,5 +752,5 @@ def export_pdf_report(run_result: Dict) -> Dict:
     return {
         "message": "PDF report exported successfully",
         "filename": filename,
-        "path": str(path),
+        "path": _public_report_path(path),
     }

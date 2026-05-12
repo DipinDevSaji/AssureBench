@@ -274,9 +274,9 @@ async def run_tests(request: RunRequest):
     "/reports/json",
     dependencies=[Depends(auth.get_current_user), Depends(rate_limiter.rate_limit_dependency("/reports/json"))],
 )
-async def export_json_report(request: ReportRequest):
+async def export_json_report(request: ReportRequest, current_user: dict = Depends(auth.get_current_user)):
     try:
-        return reports.export_json_report(request.model_dump())
+        return reports.export_json_report(request.model_dump(), current_user)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -284,23 +284,23 @@ async def export_json_report(request: ReportRequest):
     "/reports/pdf",
     dependencies=[Depends(auth.get_current_user), Depends(rate_limiter.rate_limit_dependency("/reports/pdf"))],
 )
-async def export_pdf_report(request: ReportRequest):
+async def export_pdf_report(request: ReportRequest, current_user: dict = Depends(auth.get_current_user)):
     try:
-        return reports.export_pdf_report(request.model_dump())
+        return reports.export_pdf_report(request.model_dump(), current_user)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-@app.get("/reports", dependencies=[Depends(auth.get_current_user)])
-async def list_reports():
+@app.get("/reports")
+async def list_reports(current_user: dict = Depends(auth.get_current_user)):
     try:
-        return {"reports": reports.list_exported_reports()}
+        return {"reports": reports.list_exported_reports(current_user)}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-@app.get("/reports/{filename}", dependencies=[Depends(auth.get_current_user)])
-async def get_report_file(filename: str):
+@app.get("/reports/{filename}")
+async def get_report_file(filename: str, current_user: dict = Depends(auth.get_current_user)):
     try:
-        path = reports.get_exported_report_path(filename)
+        path = reports.get_exported_report_path(filename, current_user)
         media_type = "application/pdf" if path.suffix.lower() == ".pdf" else "application/json"
         return FileResponse(str(path), media_type=media_type, filename=path.name)
     except FileNotFoundError:
@@ -308,10 +308,10 @@ async def get_report_file(filename: str):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-@app.delete("/reports/{filename}", dependencies=[Depends(auth.get_current_user)])
-async def delete_report_file(filename: str):
+@app.delete("/reports/{filename}")
+async def delete_report_file(filename: str, current_user: dict = Depends(auth.get_current_user)):
     try:
-        return reports.delete_exported_report(filename)
+        return reports.delete_exported_report(filename, current_user)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Report not found")
     except ValueError as exc:

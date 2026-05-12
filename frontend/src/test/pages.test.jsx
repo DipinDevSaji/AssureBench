@@ -10,11 +10,12 @@ import Settings from "../pages/Settings";
 import TestSuites from "../pages/TestSuites";
 import UploadedResults from "../pages/UploadedResults";
 import Recommendations from "../components/Recommendations";
+import AppRouter from "../components/AppRouter";
 import Sidebar from "../components/Sidebar";
 import AccountSettings from "../pages/AccountSettings";
 import { testSuites } from "../data/testSuites";
 import App from "../App";
-import { changePassword, createAdminUser, deleteReport, fetchReports, loginUser, submitAccessRequest } from "../api";
+import { changePassword, createAdminUser, deleteReport, fetchReports, loginUser, runAssurance, submitAccessRequest } from "../api";
 
 vi.mock("../api", () => ({
   API_BASE: "http://127.0.0.1:8000",
@@ -345,6 +346,42 @@ describe("dashboard pages", () => {
     expect(screen.getByText("AI assurance workspace")).toBeInTheDocument();
   });
 
+  test("latest run is cleared when switching from owner to normal user", async () => {
+    runAssurance.mockResolvedValueOnce({
+      ...run,
+      run_id: "run_owner_private",
+      endpoint_url: "http://127.0.0.1:8000/demo-chatbot",
+    });
+    loginUser
+      .mockResolvedValueOnce({
+        access_token: "owner-token",
+        token_type: "bearer",
+        user: { id: 1, name: "Owner", email: "owner@example.com", role: "owner", force_password_change: false },
+      })
+      .mockResolvedValueOnce({
+        access_token: "user-token",
+        token_type: "bearer",
+        user: { id: 2, name: "Client One", email: "client1@example.com", role: "user", force_password_change: false },
+      });
+
+    render(<App />);
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "owner@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "owner-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+    await userEvent.click(await screen.findByText("New Run"));
+    await userEvent.click(screen.getByRole("button", { name: /Run Assurance Tests/i }));
+    expect(await screen.findByText(/Latest run: run_owner_private/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Logout/i }));
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "client1@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "temporary-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+
+    expect(await screen.findByText("No completed run yet")).toBeInTheDocument();
+    expect(screen.queryByText(/run_owner_private/i)).not.toBeInTheDocument();
+  });
+
   test("logout returns to login", async () => {
     render(<App />);
 
@@ -371,6 +408,55 @@ describe("dashboard pages", () => {
     await screen.findByText("No completed run yet");
 
     expect(screen.queryByText("Admin Users")).not.toBeInTheDocument();
+  });
+
+  test("normal user cannot open Admin Users route directly", () => {
+    render(
+      <AppRouter
+        activeNav="Admin Users"
+        configuredTestCount={30}
+        currentTargetLabel="Built-in Demo"
+        demoEndpoint="http://127.0.0.1:8000/demo-chatbot"
+        demoError=""
+        demoRun={null}
+        demoStatus="idle"
+        demoTargets={[]}
+        endpointUrl="http://127.0.0.1:8000/demo-chatbot"
+        error=""
+        expandedSuite={null}
+        handleDemoRun={vi.fn()}
+        handleProductionRun={vi.fn()}
+        handleRun={vi.fn()}
+        handleSaveSettings={vi.fn()}
+        handleUploadReport={vi.fn()}
+        hasRun={false}
+        onUserUpdated={vi.fn()}
+        productionEndpointUrl=""
+        productionError=""
+        productionRun={null}
+        productionStatus="idle"
+        reportsRefreshKey={0}
+        run={null}
+        setActiveNav={vi.fn()}
+        setEndpointUrl={vi.fn()}
+        setExpandedSuite={vi.fn()}
+        setProductionEndpointUrl={vi.fn()}
+        setReportsRefreshKey={vi.fn()}
+        setSettingsDraft={vi.fn()}
+        settings={{ enableJsonExport: true, enablePdfExport: true }}
+        settingsDraft={{ defaultEndpointUrl: "http://127.0.0.1:8000/demo-chatbot" }}
+        settingsMessage=""
+        stats={stats}
+        status="idle"
+        testSuites={testSuites}
+        uploadError=""
+        uploadedReport={null}
+        user={{ id: 9, name: "Client One", email: "client1@example.com", role: "user" }}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: /Assurance Coverage at a Glance/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /User Access/i })).not.toBeInTheDocument();
   });
 
   test("admin page is visible to admin", async () => {
@@ -663,14 +749,89 @@ describe("dashboard pages", () => {
     expect(screen.getByText("Run 20260511014601")).toBeInTheDocument();
   });
 
+  test("Reports page marks owner-visible legacy reports", async () => {
+    fetchReports.mockResolvedValueOnce([
+      {
+        filename: "assurebench_report_run_legacy_20260511010101.json",
+        file_type: "json",
+        created_at: "2026-05-11T10:00:00Z",
+        size_bytes: 1024,
+        legacy: true,
+        download_url: "/reports/assurebench_report_run_legacy_20260511010101.json",
+      },
+    ]);
+
+    render(<Reports refreshKey={0} />);
+
+    expect(await screen.findByText("Run legacy")).toBeInTheDocument();
+    expect(screen.getByText("Legacy report")).toBeInTheDocument();
+  });
+
   test("Reports page shows empty state when no reports exist", async () => {
     fetchReports.mockResolvedValueOnce([]);
 
     render(<Reports refreshKey={0} />);
 
     expect(
-      await screen.findByText("No reports yet. Run an assurance test to generate JSON/PDF evidence reports."),
+      await screen.findByText("No reports yet. Run an assurance test to generate your first evidence report."),
     ).toBeInTheDocument();
+  });
+
+  test("normal user with no reports sees user-specific empty state", async () => {
+    fetchReports.mockResolvedValueOnce([]);
+
+    render(<Reports refreshKey={0} />);
+
+    expect(await screen.findByText(/generate your first evidence report/i)).toBeInTheDocument();
+    expect(screen.queryByText(/owner@example.com/i)).not.toBeInTheDocument();
+  });
+
+  test("normal user report list does not render owner reports when API omits them", async () => {
+    fetchReports.mockResolvedValueOnce([
+      {
+        filename: "assurebench_report_run_user_20260511010101.json",
+        file_type: "json",
+        created_at: "2026-05-11T10:00:00Z",
+        size_bytes: 2048,
+        risk_score: 20,
+        risk_level: "low",
+        total_tests: 30,
+        passed_tests: 30,
+        risky_tests: 0,
+        owner_email: "client@example.com",
+        download_url: "/reports/assurebench_report_run_user_20260511010101.json",
+      },
+    ]);
+
+    render(<Reports refreshKey={0} />);
+
+    expect(await screen.findByText("Run user")).toBeInTheDocument();
+    expect(screen.queryByText(/owner-admin-report/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/owner@example.com/i)).not.toBeInTheDocument();
+  });
+
+  test("Reports page works after a user generates a report", async () => {
+    fetchReports.mockResolvedValueOnce([
+      {
+        filename: "assurebench_report_run_newuser_20260511010101.pdf",
+        file_type: "pdf",
+        created_at: "2026-05-11T10:00:00Z",
+        size_bytes: 4096,
+        risk_score: 35,
+        risk_level: "elevated",
+        total_tests: 30,
+        passed_tests: 25,
+        risky_tests: 5,
+        owner_email: "client@example.com",
+        download_url: "/reports/assurebench_report_run_newuser_20260511010101.pdf",
+      },
+    ]);
+
+    render(<Reports refreshKey={1} />);
+
+    expect(await screen.findByText("Run newuser")).toBeInTheDocument();
+    expect(screen.getByText("Score 35")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Download PDF/i })).toBeInTheDocument();
   });
 
   test("Reports page delete action calls API and refreshes list", async () => {

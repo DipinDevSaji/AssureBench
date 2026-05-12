@@ -200,9 +200,10 @@ function App() {
   const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
 
   const hasRun = Boolean(run);
+  const canAccessAdmin = ["owner", "admin"].includes(user?.role);
   const workspaceNav = useMemo(
-    () => (["owner", "admin"].includes(user?.role) ? [...baseWorkspaceNav, "Admin Users"] : baseWorkspaceNav),
-    [user],
+    () => (canAccessAdmin ? [...baseWorkspaceNav, "Admin Users"] : baseWorkspaceNav),
+    [canAccessAdmin],
   );
   const stats = useMemo(() => getRunStats(run), [run]);
 
@@ -234,6 +235,20 @@ function App() {
     const activeTargetEndpoint = activeNav === "New Run" ? endpointUrl : run?.endpoint_url || endpointUrl;
     return getTargetLabel(activeTargetEndpoint, activeNav);
   }, [activeNav, endpointUrl, run]);
+
+  function clearSessionRunState() {
+    setDemoRun(null);
+    setDemoStatus("idle");
+    setDemoError("");
+    setProductionRun(null);
+    setProductionStatus("idle");
+    setProductionError("");
+    setUploadedReport(null);
+    setUploadError("");
+    setRun(null);
+    setStatus("idle");
+    setError("");
+  }
 
   async function handleRun() {
     setStatus("running");
@@ -325,6 +340,7 @@ function App() {
     try {
       const result = await loginUser(email, password);
       storeToken(result.access_token);
+      clearSessionRunState();
       setUser(result.user);
       setActiveNav(result.user?.force_password_change ? "Account Settings" : "Overview");
       setAuthStatus("logged-in");
@@ -338,6 +354,7 @@ function App() {
 
   function handleLogout() {
     clearStoredToken();
+    clearSessionRunState();
     setUser(null);
     setActiveNav("Overview");
     setAuthStatus("logged-out");
@@ -347,14 +364,21 @@ function App() {
     return <Login error={loginError} isLoading={authStatus === "checking"} onLogin={handleLogin} />;
   }
 
-  const effectiveActiveNav = user?.force_password_change ? "Account Settings" : activeNav;
+  const requestedActiveNav = user?.force_password_change ? "Account Settings" : activeNav;
+  const effectiveActiveNav = requestedActiveNav === "Admin Users" && !canAccessAdmin ? "Overview" : requestedActiveNav;
 
   return (
     <div className="app-shell">
         <Sidebar
         activeNav={effectiveActiveNav}
         onLogout={handleLogout}
-        onNavigate={setActiveNav}
+        onNavigate={(item) => {
+          if (item === "Admin Users" && !canAccessAdmin) {
+            setActiveNav("Overview");
+            return;
+          }
+          setActiveNav(item);
+        }}
         projects={projects}
         user={user}
         workspaceNav={workspaceNav}

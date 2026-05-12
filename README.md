@@ -483,9 +483,10 @@ The backend safely serves report files through `GET /reports/{filename}` and rej
 - Add richer PDF branding and executive summaries.
 - Add support for external LLM providers and API key management.
 - Add severity-weighted category scoring.
-- Replace prototype in-memory rate limiting with Redis-backed distributed rate limiting.
+- Replace in-memory rate limiting with Redis-backed rate limiting for horizontal scaling. The current in-memory limiter is acceptable for the local/single-instance prototype.
 - Move generated reports from local filesystem storage to persistent cloud report storage.
 - Expand frontend test coverage for navigation, uploads, exports, filtering, and error states.
+- Split the large frontend `pages.test.jsx` file into page-specific test files for long-term maintainability.
 - Deploy a live hosted demo for portfolio and recruiter review.
 
 ## Resume Bullet Point

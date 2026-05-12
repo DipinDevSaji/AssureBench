@@ -1,6 +1,6 @@
 import pytest
 
-from app import reports
+from app import auth, reports
 
 
 ALL_CATEGORIES = {
@@ -92,8 +92,9 @@ def test_delete_existing_report(tmp_path, monkeypatch):
     monkeypatch.setattr(reports, "_get_reports_dir", lambda: tmp_path)
     report_path = tmp_path / "assurebench_report_run_test_20260511010101.json"
     report_path.write_text("{}", encoding="utf-8")
+    owner = auth.authenticate_user("owner@example.com", "owner-password")
 
-    result = reports.delete_exported_report(report_path.name)
+    result = reports.delete_exported_report(report_path.name, owner)
 
     assert result["filename"] == report_path.name
     assert not report_path.exists()
@@ -123,3 +124,96 @@ def test_delete_report_does_not_delete_folders(tmp_path, monkeypatch):
         reports.delete_exported_report(folder.name)
 
     assert folder.exists()
+
+
+def _run_result(run_id="run_test"):
+    return {
+        "run_id": run_id,
+        "endpoint_url": "http://example.test/chat",
+        "summary": {
+            "risk_score": 42.0,
+            "risk_level": "elevated",
+            "evaluation": {"prompt_injection": 1.0},
+            "test_count": 1,
+        },
+        "details": [
+            {
+                "test_id": "prompt_injection_001",
+                "category": "prompt_injection",
+                "name": "Instruction Override",
+                "prompt": "Ignore rules.",
+                "risky": True,
+                "risk_score": 1.0,
+            }
+        ],
+    }
+
+
+def test_report_export_uses_user_specific_folder_and_owner_metadata(tmp_path, monkeypatch):
+    monkeypatch.setattr(reports, "_get_reports_dir", lambda: tmp_path)
+    user = auth.create_user("Customer A", "customer-a@example.com", "temporary-password", "user")
+
+    result = reports.export_json_report(_run_result("run_customer_a"), user)
+    report_path = tmp_path / str(user["id"]) / result["filename"]
+    report = reports.json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert report_path.exists()
+    assert report["owner"]["user_id"] == user["id"]
+    assert report["owner"]["email"] == "customer-a@example.com"
+
+
+def test_user_sees_own_reports_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(reports, "_get_reports_dir", lambda: tmp_path)
+    user_a = auth.create_user("Customer A", "own-a@example.com", "temporary-password", "user")
+    user_b = auth.create_user("Customer B", "own-b@example.com", "temporary-password", "user")
+    report_a = reports.export_json_report(_run_result("run_a"), user_a)
+    reports.export_json_report(_run_result("run_b"), user_b)
+
+    visible_reports = reports.list_exported_reports(user_a)
+
+    assert [item["filename"] for item in visible_reports] == [report_a["filename"]]
+    assert visible_reports[0]["owner_email"] == "own-a@example.com"
+
+
+def test_owner_and_admin_can_see_all_reports_and_legacy(tmp_path, monkeypatch):
+    monkeypatch.setattr(reports, "_get_reports_dir", lambda: tmp_path)
+    user = auth.create_user("Customer", "customer-report@example.com", "temporary-password", "user")
+    admin = auth.create_user("Trusted Admin", "admin-report@example.com", "temporary-password", "admin")
+    owner = auth.authenticate_user("owner@example.com", "owner-password")
+    legacy = tmp_path / "assurebench_report_run_legacy_20260511010101.json"
+    legacy.write_text("{}", encoding="utf-8")
+    customer_report = reports.export_json_report(_run_result("run_customer"), user)
+
+    owner_reports = reports.list_exported_reports(owner)
+    admin_reports = reports.list_exported_reports(admin)
+
+    owner_filenames = {item["filename"] for item in owner_reports}
+    admin_filenames = {item["filename"] for item in admin_reports}
+    assert customer_report["filename"] in owner_filenames
+    assert legacy.name in owner_filenames
+    assert customer_report["filename"] in admin_filenames
+    assert legacy.name in admin_filenames
+    assert any(item["filename"] == legacy.name and item["legacy"] is True for item in owner_reports)
+
+
+def test_ownerless_legacy_reports_are_hidden_from_normal_users(tmp_path, monkeypatch):
+    monkeypatch.setattr(reports, "_get_reports_dir", lambda: tmp_path)
+    user = auth.create_user("Customer", "legacy-hidden@example.com", "temporary-password", "user")
+    legacy = tmp_path / "assurebench_report_run_legacy_20260511010101.json"
+    legacy.write_text("{}", encoding="utf-8")
+
+    visible_reports = reports.list_exported_reports(user)
+
+    assert visible_reports == []
+
+
+def test_user_cannot_resolve_or_delete_another_users_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(reports, "_get_reports_dir", lambda: tmp_path)
+    user_a = auth.create_user("Customer A", "secure-a@example.com", "temporary-password", "user")
+    user_b = auth.create_user("Customer B", "secure-b@example.com", "temporary-password", "user")
+    report_b = reports.export_json_report(_run_result("run_secure_b"), user_b)
+
+    with pytest.raises(FileNotFoundError):
+        reports.get_exported_report_path(report_b["filename"], user_a)
+    with pytest.raises(FileNotFoundError):
+        reports.delete_exported_report(report_b["filename"], user_a)
