@@ -57,23 +57,23 @@ AI assurance helps teams understand whether an AI system is reliable, safe, and 
 
 ## Screenshots
 
-### Overview
+### Public Landing Page
+
+![AssureBench public landing page](screenshots/landing.jpeg)
+
+Protected public landing page with product positioning, request access flow, and approved-user sign in.
+
+### Overview Dashboard
 
 ![Overview](screenshots/overview.jpeg)
 
 Landing dashboard showing assurance coverage, latest run metrics, workflow steps, and risk categories.
 
-### Results Dashboard
+### New Assurance Run
 
-![Results Dashboard](screenshots/results.jpeg)
+![New Assurance Run](screenshots/new-run.jpeg)
 
-Run summary, category breakdown, mitigation summary, filters, and detailed test results.
-
-### Test Suites
-
-![Test Suites](screenshots/test-suites.jpeg)
-
-Expandable assurance categories showing configured checks, prompts, severities, and expected behavior.
+Custom endpoint testing page with sample demo targets for baseline, safe, and risky chatbot behavior.
 
 ### Reports
 
@@ -86,6 +86,20 @@ Reports history table for exported JSON and PDF evidence files with metadata and
 ![Recommendations](screenshots/recommendations.jpeg)
 
 Detailed mitigation planning page with priority, effort, affected category, and practical remediation steps.
+
+## More Screenshots
+
+### Results Dashboard
+
+![Results Dashboard](screenshots/results.jpeg)
+
+Run summary, category breakdown, mitigation summary, filters, and detailed test results.
+
+### Test Suites
+
+![Test Suites](screenshots/test-suites.jpeg)
+
+Expandable assurance categories showing configured checks, prompts, severities, and expected behavior.
 
 ## AI Risk Categories Tested
 
