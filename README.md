@@ -352,7 +352,12 @@ This is a prototype deployment guide for hosting AssureBench outside local devel
 
 ### Backend on Hugging Face Spaces
 
-The backend includes `backend/Dockerfile` for Docker-based Hugging Face Spaces deployment. Create a new Hugging Face Space using the Docker SDK, deploy the backend folder, and expose FastAPI on port `7860`.
+This monorepo includes two Dockerfiles so deployment is clear in both common workflows:
+
+- `Dockerfile` at the repository root: use this when importing the whole GitHub repository into Hugging Face Spaces.
+- `backend/Dockerfile`: use this only if you manually deploy the `backend/` folder as the Docker build context.
+
+For the simplest Hugging Face Spaces setup, create a new Space using the Docker SDK and connect the whole GitHub repository. Hugging Face Spaces will use the root `Dockerfile`, install `backend/requirements.txt`, copy `backend/app`, and expose FastAPI on port `7860`.
 
 The container starts with:
 
@@ -372,6 +377,7 @@ ASSUREBENCH_DATA_DIR=/data
 ```
 
 Do not commit real credentials. `backend/.env.example` contains safe local placeholders only.
+Set Hugging Face backend secrets in **Space Settings**, not in committed files.
 
 If `ASSUREBENCH_DATA_DIR` is set, AssureBench stores the SQLite auth database at `ASSUREBENCH_DATA_DIR/assurebench_auth.db` and generated reports under `ASSUREBENCH_DATA_DIR/reports`. If it is not set, local development keeps the default project-local database and reports folder behavior.
 

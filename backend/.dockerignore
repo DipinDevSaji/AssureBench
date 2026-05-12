@@ -1,0 +1,11 @@
+.env
+assurebench_auth.db
+*.db
+*.sqlite
+*.sqlite3
+reports/
+.venv/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/

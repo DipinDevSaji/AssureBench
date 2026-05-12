@@ -1,0 +1,16 @@
+backend/.env
+backend/assurebench_auth.db
+*.db
+*.sqlite
+*.sqlite3
+reports/
+frontend/node_modules/
+frontend/dist/
+node_modules/
+.venv/
+backend/.venv/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/
+.git/
