@@ -22,6 +22,7 @@ RATE_LIMITS = {
     "/runs": RateLimit(requests=10),
     "/reports/json": RateLimit(requests=20),
     "/reports/pdf": RateLimit(requests=20),
+    "/access-requests": RateLimit(requests=5, window_seconds=3600),
 }
 
 _REQUEST_TIMESTAMPS: Dict[Tuple[str, str], Deque[float]] = defaultdict(deque)
@@ -36,10 +37,17 @@ def _client_ip(request: Request) -> str:
     return "unknown"
 
 
+def _request_identity(request: Request) -> str:
+    current_user = getattr(request.state, "current_user", None)
+    if current_user and current_user.get("email"):
+        return f"user:{current_user['email']}"
+    return f"ip:{_client_ip(request)}"
+
+
 def _enforce_rate_limit(route_key: str, request: Request) -> None:
     limit = RATE_LIMITS[route_key]
     now = time.monotonic()
-    key = (route_key, _client_ip(request))
+    key = (route_key, _request_identity(request))
     timestamps = _REQUEST_TIMESTAMPS[key]
 
     while timestamps and now - timestamps[0] >= limit.window_seconds:

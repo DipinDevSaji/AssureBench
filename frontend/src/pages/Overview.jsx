@@ -1,7 +1,19 @@
 import React from "react";
 import { formatCategoryLabel } from "../utils/categoryLabels";
 
-function Overview({ configuredTestCount, hasRun, onOpenDemo, onOpenNewRun, onOpenTestSuites, stats, testSuites }) {
+function Overview({
+  configuredTestCount,
+  currentTargetLabel = "Built-in Demo",
+  hasRun,
+  onOpenCustomEndpoint,
+  onOpenDemo,
+  onOpenNewRun,
+  onOpenTestSuites,
+  stats,
+  testSuites,
+}) {
+  const targetCardValue = currentTargetLabel === "Custom Endpoint" ? "Custom Endpoint" : "Built-in Demo Chatbot";
+
   const capabilityCards = [
     {
       label: "Total test categories",
@@ -20,8 +32,8 @@ function Overview({ configuredTestCount, hasRun, onOpenDemo, onOpenNewRun, onOpe
     },
     {
       label: "Current target",
-      value: "Demo Chatbot",
-      note: "Local endpoint available for first runs",
+      value: targetCardValue,
+      note: "Default local/demo endpoint for first assurance runs.",
     },
   ];
 
@@ -104,11 +116,16 @@ function Overview({ configuredTestCount, hasRun, onOpenDemo, onOpenNewRun, onOpe
           <div>
             <p className="section-kicker">First report</p>
             <h2 id="overview-empty-title">No assurance run completed yet</h2>
-            <p>Run the demo chatbot test suite to generate your first risk report.</p>
+            <p>Start with the built-in demo chatbot or test your own chatbot API endpoint.</p>
           </div>
-          <button className="primary-button" onClick={onOpenDemo}>
-            Run Demo Chatbot
-          </button>
+          <div className="hero-actions">
+            <button className="primary-button" onClick={onOpenDemo}>
+              Run Built-in Demo
+            </button>
+            <button className="secondary-button" onClick={onOpenCustomEndpoint || onOpenNewRun}>
+              Test Custom Endpoint
+            </button>
+          </div>
         </section>
       )}
 

@@ -28,6 +28,10 @@ def test_recommendations_exist_for_all_categories():
         assert recommendation["priority"]
         assert recommendation["effort"]
         assert 2 <= len(recommendation["items"]) <= 3
+        assert recommendation["details"]["why"]
+        assert recommendation["details"]["steps"]
+        assert recommendation["details"]["checklist"]
+        assert recommendation["details"]["owner"]
 
 
 def test_failed_or_risky_tests_use_individual_status():
@@ -82,3 +86,40 @@ def test_json_report_schema_contains_required_sections(tmp_path, monkeypatch):
 def test_report_file_path_rejects_traversal(filename):
     with pytest.raises(ValueError):
         reports.get_exported_report_path(filename)
+
+
+def test_delete_existing_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(reports, "_get_reports_dir", lambda: tmp_path)
+    report_path = tmp_path / "assurebench_report_run_test_20260511010101.json"
+    report_path.write_text("{}", encoding="utf-8")
+
+    result = reports.delete_exported_report(report_path.name)
+
+    assert result["filename"] == report_path.name
+    assert not report_path.exists()
+
+
+def test_delete_missing_report_returns_file_not_found(tmp_path, monkeypatch):
+    monkeypatch.setattr(reports, "_get_reports_dir", lambda: tmp_path)
+
+    with pytest.raises(FileNotFoundError):
+        reports.delete_exported_report("assurebench_report_missing.json")
+
+
+@pytest.mark.parametrize("filename", ["../README.md", "../../.env", "C:\\Users\\dipin\\.env", "nested/report.json"])
+def test_delete_report_rejects_path_traversal(tmp_path, monkeypatch, filename):
+    monkeypatch.setattr(reports, "_get_reports_dir", lambda: tmp_path)
+
+    with pytest.raises(ValueError):
+        reports.delete_exported_report(filename)
+
+
+def test_delete_report_does_not_delete_folders(tmp_path, monkeypatch):
+    monkeypatch.setattr(reports, "_get_reports_dir", lambda: tmp_path)
+    folder = tmp_path / "assurebench_report_folder.json"
+    folder.mkdir()
+
+    with pytest.raises(FileNotFoundError):
+        reports.delete_exported_report(folder.name)
+
+    assert folder.exists()

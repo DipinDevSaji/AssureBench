@@ -52,7 +52,7 @@ AI assurance helps teams understand whether an AI system is reliable, safe, and 
 - PDF report export using ReportLab.
 - Reports page that lists exported JSON and PDF files.
 - Safe report download endpoint with path traversal protection.
-- Built-in demo chatbot endpoint for local testing.
+- Built-in safe, mixed, and risky demo chatbot endpoints for local testing.
 - Browser-local Settings page for endpoint defaults and report export options.
 
 ## Screenshots
@@ -226,14 +226,72 @@ http://127.0.0.1:8000
 Useful endpoints:
 
 - `GET /health`
+- `POST /auth/login`
+- `GET /auth/me`
+- `POST /admin/users`
+- `GET /admin/users`
 - `POST /runs`
 - `POST /demo-chatbot`
+- `POST /safe-demo-chatbot`
+- `POST /risky-demo-chatbot`
 - `POST /reports/json`
 - `POST /reports/pdf`
 - `GET /reports`
 - `GET /reports/{filename}`
 
 AssureBench includes prototype in-memory rate limiting for high-cost routes such as assurance runs and report exports. This is suitable for local/demo deployments. For production or multi-instance deployments, this should be replaced with Redis-backed or gateway-level distributed rate limiting.
+
+## Authentication
+
+AssureBench supports owner/admin-created user accounts for paid-access-ready prototype deployments. Dashboard users must sign in before they can run assurance tests or access exported reports.
+
+- Passwords are stored as hashes using Passlib/bcrypt.
+- JWT access tokens are used for session access.
+- The first owner user is created on startup when no users exist and these environment variables are set:
+  - `ASSUREBENCH_JWT_SECRET`
+  - `ASSUREBENCH_OWNER_NAME`
+  - `ASSUREBENCH_OWNER_EMAIL`
+  - `ASSUREBENCH_OWNER_PASSWORD`
+- Example placeholders are provided in `backend/.env.example`. Do not commit real credentials.
+- Public visitors cannot create accounts directly. They can only log in with existing credentials or submit an access request.
+- The owner can create admin accounts for trusted people and user accounts for customers.
+- Admin users can view access requests and create/deactivate normal customer accounts only.
+
+For production payments, integrate Stripe or another payment provider later, then create or activate AssureBench user accounts after successful payment.
+
+## Local Owner Login
+
+The first owner account is created automatically when the backend starts and the users table is empty. User accounts are stored in the backend SQLite database at `backend/assurebench_auth.db`.
+
+To set up the local owner login:
+
+1. Copy `backend/.env.example` to `backend/.env`.
+2. Set `ASSUREBENCH_OWNER_NAME` to your owner display name.
+3. Set `ASSUREBENCH_OWNER_EMAIL` to your owner login email.
+4. Set `ASSUREBENCH_OWNER_PASSWORD` to your owner password.
+5. Set `ASSUREBENCH_JWT_SECRET` to a long random secret value.
+6. Restart the backend.
+7. Log in through the frontend using the owner email and password.
+
+`backend/.env` is ignored by Git. Do not commit real credentials.
+
+For local development, you can create or update the owner account from `backend/.env` with:
+
+```powershell
+cd backend
+python -m app.seed_owner
+```
+
+The owner logs in using `ASSUREBENCH_OWNER_EMAIL` and `ASSUREBENCH_OWNER_PASSWORD`.
+
+## Access Request Flow
+
+Users without an account can submit an access request from the login page. AssureBench stores the request for admin review, but it does not create an account automatically and it does not collect card or payment information. The intended MVP flow is:
+
+1. A user submits their name, email, project, intended use, expected usage, and message.
+2. The owner or an admin reviews the request in the Admin Users page.
+3. Payment is handled manually outside the app, such as by sending a payment link.
+4. After approval/payment, the owner or an admin creates customer credentials from the Admin Users page. The owner can also create admin accounts for trusted people.
 
 ## How to Run Frontend
 
@@ -278,7 +336,7 @@ The frontend API base URL can be configured with `VITE_API_BASE_URL`. See `front
 
 This is a prototype deployment guide for hosting AssureBench outside local development.
 
-Deploy the FastAPI backend first on a service such as Render, Fly.io, Railway, or another Python-capable host. The backend must expose the same API routes used locally, including `/runs`, `/demo-chatbot`, `/reports/json`, `/reports/pdf`, and `/reports`.
+Deploy the FastAPI backend first on a service such as Render, Fly.io, Railway, or another Python-capable host. The backend must expose the same API routes used locally, including `/runs`, `/demo-chatbot`, `/safe-demo-chatbot`, `/risky-demo-chatbot`, `/reports/json`, `/reports/pdf`, and `/reports`.
 
 After the backend is deployed, configure the frontend with the deployed backend URL:
 
@@ -329,6 +387,20 @@ http://127.0.0.1:8000/demo-chatbot
 The backend sends all assurance test prompts to the target endpoint and returns a run result containing `run_id`, `summary`, and `details`.
 
 Settings such as the default endpoint URL and report export toggles are stored locally in the browser using `localStorage`. They are not sent to a backend settings database.
+
+## Local Demo Chatbot Endpoints
+
+AssureBench includes three local chatbot endpoints for testing different assurance outcomes:
+
+```text
+http://127.0.0.1:8000/demo-chatbot
+http://127.0.0.1:8000/safe-demo-chatbot
+http://127.0.0.1:8000/risky-demo-chatbot
+```
+
+- `/demo-chatbot` provides mixed local behavior for the default dashboard demo.
+- `/safe-demo-chatbot` returns privacy-safe refusal-style responses and should mostly pass the assurance suite.
+- `/risky-demo-chatbot` intentionally returns unsafe, leaky, hallucinated, prompt-injected, and invalid-format responses to produce higher risk scores.
 
 ## How to Export JSON and PDF Reports
 
@@ -394,22 +466,27 @@ The backend safely serves report files through `GET /reports/{filename}` and rej
 - The demo chatbot intentionally returns risky outputs for testing.
 - The risk score uses a saved logistic-regression model trained on synthetic and seed examples, so it should be treated as a prototype rather than production-calibrated scoring.
 - Test outcomes are scored per test, while the overall risk score is still a prototype model output.
-- The project does not yet support authentication, user accounts, or multi-tenant workspaces.
+- Authentication is implemented as an MVP using SQLite and JWT; it is not yet a full multi-tenant account system.
 - Reports are saved to the local filesystem rather than cloud storage.
 - PDF styling is functional but not yet a full enterprise reporting template.
 
 ## Future Work
 
 - Train a supervised ML model for risk scoring using labeled evaluation data.
+- Expand the synthetic training data into a larger, more realistic labelled dataset using sampled response distributions and human review.
 - Add per-test risk scores and confidence values.
 - Add custom test-suite upload and editing.
 - Support multiple projects and saved endpoint configurations.
-- Add authentication and role-based access control.
+- Expand authentication with password reset, email verification, and organization-level roles.
 - Add historical trend charts across runs.
 - Add CI/CD integration for automated assurance checks before deployment.
 - Add richer PDF branding and executive summaries.
 - Add support for external LLM providers and API key management.
 - Add severity-weighted category scoring.
+- Replace prototype in-memory rate limiting with Redis-backed distributed rate limiting.
+- Move generated reports from local filesystem storage to persistent cloud report storage.
+- Expand frontend test coverage for navigation, uploads, exports, filtering, and error states.
+- Deploy a live hosted demo for portfolio and recruiter review.
 
 ## Resume Bullet Point
 

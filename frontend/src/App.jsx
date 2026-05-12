@@ -1,17 +1,21 @@
-import React, { useMemo, useState } from "react";
-import { API_BASE, runAssurance } from "./api";
-import Recommendations from "./components/Recommendations";
-import NewRun from "./pages/NewRun";
-import Overview from "./pages/Overview";
-import Reports from "./pages/Reports";
-import RunResults from "./pages/RunResults";
-import Settings from "./pages/Settings";
-import TargetRun from "./pages/TargetRun";
-import TestSuites from "./pages/TestSuites";
-import UploadedResults from "./pages/UploadedResults";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  API_BASE,
+  clearStoredToken,
+  fetchCurrentUser,
+  getStoredToken,
+  loginUser,
+  runAssurance,
+  storeToken,
+} from "./api";
+import AppRouter from "./components/AppRouter";
+import Sidebar from "./components/Sidebar";
+import Login from "./pages/Login";
 import { testSuites } from "./data/testSuites";
 
 const DEFAULT_ENDPOINT = `${API_BASE}/demo-chatbot`;
+const SAFE_DEMO_ENDPOINT = `${API_BASE}/safe-demo-chatbot`;
+const RISKY_DEMO_ENDPOINT = `${API_BASE}/risky-demo-chatbot`;
 const SETTINGS_STORAGE_KEY = "assurebench.settings";
 const DEFAULT_SETTINGS = {
   defaultEndpointUrl: DEFAULT_ENDPOINT,
@@ -19,7 +23,7 @@ const DEFAULT_SETTINGS = {
   enablePdfExport: true,
 };
 
-const workspaceNav = [
+const baseWorkspaceNav = [
   "Overview",
   "New Run",
   "Results",
@@ -27,10 +31,45 @@ const workspaceNav = [
   "Reports",
   "Recommendations",
   "Settings",
+  "Account Settings",
 ];
 
 const projects = ["Demo Chatbot", "Production Endpoint", "Uploaded Results"];
 const configuredTestCount = testSuites.reduce((count, suite) => count + suite.tests.length, 0);
+
+const demoTargets = [
+  {
+    title: "Built-in Demo",
+    endpoint: DEFAULT_ENDPOINT,
+    note: "Balanced local chatbot behavior for baseline assurance runs.",
+  },
+  {
+    title: "Safe Demo",
+    endpoint: SAFE_DEMO_ENDPOINT,
+    note: "Privacy-safe refusal style responses that should mostly pass.",
+  },
+  {
+    title: "Risky Demo sample",
+    endpoint: RISKY_DEMO_ENDPOINT,
+    note: "Intentionally risky behavior for stress testing the dashboard.",
+  },
+];
+
+function getTargetLabel(endpointUrl, activeNav) {
+  if (endpointUrl === SAFE_DEMO_ENDPOINT) {
+    return "Safe Demo";
+  }
+  if (endpointUrl === RISKY_DEMO_ENDPOINT) {
+    return "Risky Demo";
+  }
+  if (endpointUrl === DEFAULT_ENDPOINT || activeNav === "Demo Chatbot") {
+    return "Built-in Demo";
+  }
+  if (activeNav === "Production Endpoint" || endpointUrl) {
+    return "Custom Endpoint";
+  }
+  return "Built-in Demo";
+}
 
 const pageCopy = {
   Overview: {
@@ -68,26 +107,32 @@ const pageCopy = {
     title: "Settings",
     intro: "Manage default endpoint, reporting, risk scoring, and project information placeholders.",
   },
+  "Account Settings": {
+    kicker: "Account security",
+    title: "Account Settings",
+    intro: "Change your account password and review your signed-in role.",
+  },
+  "Admin Users": {
+    kicker: "Access control",
+    title: "Admin Users",
+    intro: "Create and deactivate AssureBench user accounts for protected dashboard access.",
+  },
   "Demo Chatbot": {
     kicker: "Built-in demo",
-    title: "Demo Chatbot",
+    title: "Built-in Demo Chatbot",
     intro: "Run assurance checks against the built-in local demo chatbot endpoint.",
   },
   "Production Endpoint": {
-    kicker: "Production testing",
-    title: "Production Endpoint",
+    kicker: "Custom testing",
+    title: "Custom Endpoint",
     intro: "Test a real chatbot API endpoint instead of the local demo chatbot and review the assurance results.",
   },
   "Uploaded Results": {
     kicker: "Imported evidence",
-    title: "Uploaded Results",
+    title: "Import Results",
     intro: "Upload an exported AssureBench JSON report and inspect its summary, category breakdown, and test details locally.",
   },
 };
-
-function getCategory(item) {
-  return item.category || item.test_id || "uncategorized";
-}
 
 function isItemRisky(item) {
   const failedStatus = item.status_code != null && (item.status_code < 200 || item.status_code >= 300);
@@ -113,70 +158,27 @@ function getRunStats(run) {
   };
 }
 
-function getCategoryBreakdown(details, evaluation) {
-  const grouped = details.reduce((acc, item) => {
-    const category = getCategory(item);
-    acc[category] = acc[category] || [];
-    acc[category].push(item);
-    return acc;
-  }, {});
-
-  return Object.entries(grouped)
-    .map(([key, items]) => {
-      const total = items.length;
-      const riskyCount = items.filter(isItemRisky).length;
-      const passedCount = Math.max(0, total - riskyCount);
-
-      return {
-        key,
-        total,
-        riskyCount,
-        passedCount,
-        riskPercentage: total ? Math.round((riskyCount / total) * 100) : 0,
-        score: Number(evaluation?.[key] || 0),
-      };
-    })
-    .sort((a, b) => a.key.localeCompare(b.key));
-}
-
-function getReportStats(report) {
-  if (!report) {
-    return {
-      passRate: 0,
-      passedTests: 0,
-      riskLevel: "--",
-      riskScore: "--",
-      riskyTests: 0,
-      totalTests: 0,
-    };
-  }
-
-  const details = report.details || [];
-  const summary = report.summary || {};
-  const totalTests = summary.test_count ?? details.length;
-  const riskyTests = report.failed_or_risky_tests?.length ?? details.filter(isItemRisky).length;
-  const passedTests = Math.max(0, totalTests - riskyTests);
-
-  return {
-    passRate: totalTests ? Math.round((passedTests / totalTests) * 100) : 0,
-    passedTests,
-    riskLevel: report.risk_level || summary.risk_level || "--",
-    riskScore: report.risk_score ?? summary.risk_score ?? "--",
-    riskyTests,
-    totalTests,
-  };
-}
-
 function loadStoredSettings() {
   try {
     const stored = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-    return stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS;
+    if (!stored) {
+      return DEFAULT_SETTINGS;
+    }
+    const parsed = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+    const oldLocalDemoEndpoint = "http://127.0.0.1:8000/demo-chatbot";
+    if (parsed.defaultEndpointUrl === oldLocalDemoEndpoint && DEFAULT_ENDPOINT !== oldLocalDemoEndpoint) {
+      return { ...parsed, defaultEndpointUrl: DEFAULT_ENDPOINT };
+    }
+    return parsed;
   } catch {
     return DEFAULT_SETTINGS;
   }
 }
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [authStatus, setAuthStatus] = useState(() => (getStoredToken() ? "checking" : "logged-out"));
+  const [loginError, setLoginError] = useState("");
   const [settings, setSettings] = useState(loadStoredSettings);
   const [settingsDraft, setSettingsDraft] = useState(loadStoredSettings);
   const [settingsMessage, setSettingsMessage] = useState("");
@@ -198,7 +200,28 @@ function App() {
   const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
 
   const hasRun = Boolean(run);
+  const workspaceNav = useMemo(
+    () => (["owner", "admin"].includes(user?.role) ? [...baseWorkspaceNav, "Admin Users"] : baseWorkspaceNav),
+    [user],
+  );
   const stats = useMemo(() => getRunStats(run), [run]);
+
+  useEffect(() => {
+    if (!getStoredToken()) {
+      return;
+    }
+
+    fetchCurrentUser()
+      .then((currentUser) => {
+        setUser(currentUser);
+        setAuthStatus("logged-in");
+      })
+      .catch(() => {
+        clearStoredToken();
+        setUser(null);
+        setAuthStatus("logged-out");
+      });
+  }, []);
 
   const lastRunLabel = useMemo(() => {
     if (!run?.run_id) {
@@ -206,6 +229,11 @@ function App() {
     }
     return `Latest run: ${run.run_id}`;
   }, [run]);
+
+  const currentTargetLabel = useMemo(() => {
+    const activeTargetEndpoint = activeNav === "New Run" ? endpointUrl : run?.endpoint_url || endpointUrl;
+    return getTargetLabel(activeTargetEndpoint, activeNav);
+  }, [activeNav, endpointUrl, run]);
 
   async function handleRun() {
     setStatus("running");
@@ -281,211 +309,66 @@ function App() {
   }
 
   function handleSaveSettings() {
+    if (!["owner", "admin"].includes(user?.role)) {
+      setSettingsMessage("Workspace settings are read-only for user accounts.");
+      return;
+    }
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settingsDraft));
     setSettings(settingsDraft);
     setEndpointUrl(settingsDraft.defaultEndpointUrl);
     setSettingsMessage("Settings saved locally.");
   }
 
-  function renderNewRunPage() {
-    return (
-      <NewRun
-        endpointUrl={endpointUrl}
-        error={error}
-        isRunning={status === "running"}
-        onEndpointChange={setEndpointUrl}
-        onRun={handleRun}
-        status={status}
-      />
-    );
+  async function handleLogin(email, password) {
+    setAuthStatus("checking");
+    setLoginError("");
+    try {
+      const result = await loginUser(email, password);
+      storeToken(result.access_token);
+      setUser(result.user);
+      setActiveNav(result.user?.force_password_change ? "Account Settings" : "Overview");
+      setAuthStatus("logged-in");
+    } catch (err) {
+      clearStoredToken();
+      setUser(null);
+      setAuthStatus("logged-out");
+      setLoginError(err.message || "Login failed.");
+    }
   }
 
-  function renderRecommendationsPage() {
-    return <Recommendations evaluation={run?.summary?.evaluation || {}} showExports={false} variant="detailed" />;
+  function handleLogout() {
+    clearStoredToken();
+    setUser(null);
+    setActiveNav("Overview");
+    setAuthStatus("logged-out");
   }
 
-  function renderActivePage() {
-    if (activeNav === "Overview") {
-      return (
-        <Overview
-          configuredTestCount={configuredTestCount}
-          hasRun={hasRun}
-          onOpenDemo={() => setActiveNav("Demo Chatbot")}
-          onOpenNewRun={() => setActiveNav("New Run")}
-          onOpenTestSuites={() => setActiveNav("Test Suites")}
-          stats={stats}
-          testSuites={testSuites}
-        />
-      );
-    }
-    if (activeNav === "New Run") {
-      return renderNewRunPage();
-    }
-    if (activeNav === "Demo Chatbot") {
-      return (
-        <TargetRun
-          description="Demo Target"
-          endpointProps={{ id: "demo-endpoint-url", value: DEFAULT_ENDPOINT, readOnly: true }}
-          error={demoError}
-          isRunning={demoStatus === "running"}
-          onReportExported={() => setReportsRefreshKey((key) => key + 1)}
-          onRun={handleDemoRun}
-          onViewRecommendations={() => setActiveNav("Recommendations")}
-          panelCopy="Run assurance checks against the built-in local demo chatbot endpoint."
-          readyText="Ready to test the local demo chatbot."
-          run={demoRun}
-          settings={settings}
-          status={demoStatus}
-          title="Demo Chatbot"
-          titleId="demo-chatbot-title"
-        />
-      );
-    }
-    if (activeNav === "Results") {
-      return (
-        <RunResults
-          hasRun={hasRun}
-          onReportExported={() => setReportsRefreshKey((key) => key + 1)}
-          onViewRecommendations={() => setActiveNav("Recommendations")}
-          run={run}
-          settings={settings}
-        />
-      );
-    }
-    if (activeNav === "Test Suites") {
-      return (
-        <TestSuites
-          configuredTestCount={configuredTestCount}
-          expandedSuite={expandedSuite}
-          onToggleSuite={setExpandedSuite}
-          run={run}
-          testSuites={testSuites}
-        />
-      );
-    }
-    if (activeNav === "Reports") {
-      return <Reports refreshKey={reportsRefreshKey} />;
-    }
-    if (activeNav === "Recommendations") {
-      return renderRecommendationsPage();
-    }
-    if (activeNav === "Settings") {
-      return (
-        <Settings
-          onSaveSettings={handleSaveSettings}
-          settingsDraft={settingsDraft}
-          settingsMessage={settingsMessage}
-          setSettingsDraft={setSettingsDraft}
-        />
-      );
-    }
-    if (activeNav === "Production Endpoint") {
-      return (
-        <TargetRun
-          description="Production Target"
-          endpointProps={{
-            id: "production-endpoint-url",
-            value: productionEndpointUrl,
-            onChange: (event) => setProductionEndpointUrl(event.target.value),
-            placeholder: "https://your-api.example.com/chat",
-          }}
-          error={productionError}
-          isRunDisabled={!productionEndpointUrl}
-          isRunning={productionStatus === "running"}
-          onReportExported={() => setReportsRefreshKey((key) => key + 1)}
-          onRun={handleProductionRun}
-          onViewRecommendations={() => setActiveNav("Recommendations")}
-          panelCopy="Use this page to test a real chatbot API endpoint instead of the built-in demo chatbot."
-          readyText="Ready to test a production endpoint."
-          run={productionRun}
-          settings={settings}
-          status={productionStatus}
-          title="Production Endpoint"
-          titleId="production-endpoint-title"
-        />
-      );
-    }
-    if (activeNav === "Uploaded Results") {
-      const details = uploadedReport?.details || [];
-      const evaluation = uploadedReport?.summary?.evaluation || {};
-      return (
-        <UploadedResults
-          breakdown={getCategoryBreakdown(details, evaluation)}
-          onUploadReport={handleUploadReport}
-          stats={getReportStats(uploadedReport)}
-          uploadError={uploadError}
-          uploadedReport={uploadedReport}
-        />
-      );
-    }
-
-    return (
-      <Overview
-        configuredTestCount={configuredTestCount}
-        hasRun={hasRun}
-        onOpenDemo={() => setActiveNav("Demo Chatbot")}
-        onOpenNewRun={() => setActiveNav("New Run")}
-        onOpenTestSuites={() => setActiveNav("Test Suites")}
-        stats={stats}
-        testSuites={testSuites}
-      />
-    );
+  if (authStatus !== "logged-in") {
+    return <Login error={loginError} isLoading={authStatus === "checking"} onLogin={handleLogin} />;
   }
+
+  const effectiveActiveNav = user?.force_password_change ? "Account Settings" : activeNav;
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="AssureBench navigation">
-        <div className="sidebar-header">
-          <div className="brand-mark">A</div>
-          <div>
-            <h2>AssureBench</h2>
-            <p>AI assurance workspace</p>
-          </div>
-        </div>
-
-        <nav className="sidebar-section" aria-label="Workspace">
-          <p>Workspace</p>
-          {workspaceNav.map((item) => (
-            <a
-              className={item === activeNav ? "active" : ""}
-              href={`#${item.toLowerCase().replaceAll(" ", "-")}`}
-              key={item}
-              onClick={() => setActiveNav(item)}
-            >
-              {item}
-            </a>
-          ))}
-        </nav>
-
-        <nav className="sidebar-section" aria-label="Projects">
-          <p>Projects</p>
-          {projects.map((item) => (
-            <a
-              className={item === activeNav ? "active" : ""}
-              href={`#${item.toLowerCase().replaceAll(" ", "-")}`}
-              key={item}
-              onClick={() => setActiveNav(item)}
-            >
-              {item}
-            </a>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer" id="settings">
-          <span>Workspace</span>
-          <strong>Academic Evaluation Lab</strong>
-        </div>
-      </aside>
+        <Sidebar
+        activeNav={effectiveActiveNav}
+        onLogout={handleLogout}
+        onNavigate={setActiveNav}
+        projects={projects}
+        user={user}
+        workspaceNav={workspaceNav}
+      />
 
       <main className="dashboard-main">
-        <header className="topbar" id={activeNav.toLowerCase().replaceAll(" ", "-")}>
+        <header className="topbar" id={effectiveActiveNav.toLowerCase().replaceAll(" ", "-")}>
           <div>
-            <p className="eyebrow">{pageCopy[activeNav].kicker}</p>
-            <h1>{pageCopy[activeNav].title}</h1>
+            <p className="eyebrow">{pageCopy[effectiveActiveNav].kicker}</p>
+            <h1>{pageCopy[effectiveActiveNav].title}</h1>
             <p className="intro">
-              {pageCopy[activeNav].intro}
+              {pageCopy[effectiveActiveNav].intro}
             </p>
-            {activeNav === "Overview" ? (
+            {effectiveActiveNav === "Overview" ? (
               <div className="hero-actions">
                 <button className="primary-button" onClick={() => setActiveNav("New Run")}>
                   Start New Run
@@ -498,11 +381,52 @@ function App() {
           </div>
           <div className="hero-meta">
             <span className="run-pill">{lastRunLabel}</span>
-            <span className="workspace-pill">Demo Chatbot</span>
+            <span className="workspace-pill">Current target: {currentTargetLabel}</span>
+            {user?.role ? <span className={`role-badge ${user.role}`}>{user.role}</span> : null}
           </div>
         </header>
 
-        {renderActivePage()}
+        <AppRouter
+          activeNav={effectiveActiveNav}
+          configuredTestCount={configuredTestCount}
+          currentTargetLabel={currentTargetLabel}
+          demoEndpoint={DEFAULT_ENDPOINT}
+          demoTargets={demoTargets}
+          demoError={demoError}
+          demoRun={demoRun}
+          demoStatus={demoStatus}
+          endpointUrl={endpointUrl}
+          error={error}
+          expandedSuite={expandedSuite}
+          handleDemoRun={handleDemoRun}
+          handleProductionRun={handleProductionRun}
+          handleRun={handleRun}
+          handleSaveSettings={handleSaveSettings}
+          handleUploadReport={handleUploadReport}
+          hasRun={hasRun}
+          productionEndpointUrl={productionEndpointUrl}
+          productionError={productionError}
+          productionRun={productionRun}
+          productionStatus={productionStatus}
+          reportsRefreshKey={reportsRefreshKey}
+          run={run}
+          setActiveNav={setActiveNav}
+          setEndpointUrl={setEndpointUrl}
+          setExpandedSuite={setExpandedSuite}
+          setProductionEndpointUrl={setProductionEndpointUrl}
+          setReportsRefreshKey={setReportsRefreshKey}
+          setSettingsDraft={setSettingsDraft}
+          settings={settings}
+          settingsDraft={settingsDraft}
+          settingsMessage={settingsMessage}
+          stats={stats}
+          status={status}
+          testSuites={testSuites}
+          uploadError={uploadError}
+          uploadedReport={uploadedReport}
+          user={user}
+          onUserUpdated={setUser}
+        />
       </main>
     </div>
   );

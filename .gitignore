@@ -8,3 +8,7 @@ reports/
 .env
 frontend/.env
 backend/.env
+*.db
+backend/*.db
+*.sqlite
+*.sqlite3

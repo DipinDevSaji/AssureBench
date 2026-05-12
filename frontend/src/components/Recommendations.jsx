@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import { detailedMitigationPlans } from "../data/recommendationPlans";
 import { formatCategoryLabel } from "../utils/categoryLabels";
 
 const recommendationRules = [
@@ -114,7 +115,9 @@ const recommendationRules = [
 ];
 
 function getRecommendations(evaluation) {
-  return recommendationRules.filter((rule) => Number(evaluation?.[rule.key] || 0) > 0);
+  return recommendationRules
+    .filter((rule) => Number(evaluation?.[rule.key] || 0) > 0)
+    .map((rule) => ({ ...rule, details: detailedMitigationPlans[rule.key] }));
 }
 
 function Recommendations({
@@ -131,15 +134,21 @@ function Recommendations({
   showExports = true,
   variant = "detailed",
 }) {
+  const [expandedKeys, setExpandedKeys] = useState({});
   const recommendations = getRecommendations(evaluation);
   const compact = variant === "compact";
+
+  function toggleDetails(key) {
+    setExpandedKeys((current) => ({ ...current, [key]: !current[key] }));
+  }
 
   return (
     <section className={compact ? "recommendations-panel recommendations-compact" : "recommendations-panel"} aria-labelledby="recommendations-title">
       <div className="section-heading compact">
         <div>
           <p className="section-kicker">Recommendations</p>
-          <h2 id="recommendations-title">{compact ? "Suggested Mitigations Summary" : "Detailed Mitigation Plan"}</h2>
+          <h2 id="recommendations-title">{compact ? "Mitigation Summary" : "Detailed Mitigation Plan"}</h2>
+          {compact ? <p className="panel-copy">Top recommended actions from the latest run.</p> : null}
         </div>
         <span className="recommendation-count">{recommendations.length} active</span>
       </div>
@@ -159,10 +168,55 @@ function Recommendations({
                 </div>
               ) : null}
               <ul>
-                {(compact ? recommendation.items.slice(0, 1) : recommendation.items).map((item) => (
+                {(compact ? recommendation.items.slice(0, 2) : recommendation.items).map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
+              {!compact && recommendation.details ? (
+                <>
+                  <button className="secondary-button recommendation-detail-toggle" onClick={() => toggleDetails(recommendation.key)} type="button">
+                    {expandedKeys[recommendation.key] ? "Hide details" : "View details"}
+                  </button>
+                  {expandedKeys[recommendation.key] ? (
+                    <div className="recommendation-details">
+                      <div>
+                        <h4>Why it matters</h4>
+                        <p>{recommendation.details.why}</p>
+                      </div>
+                      <div>
+                        <h4>Implementation steps</h4>
+                        <ol>
+                          {recommendation.details.steps.map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ol>
+                      </div>
+                      <div>
+                        <h4>Validation checklist</h4>
+                        <ul>
+                          {recommendation.details.checklist.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <dl className="recommendation-detail-meta">
+                        <div>
+                          <dt>Owner</dt>
+                          <dd>{recommendation.details.owner}</dd>
+                        </div>
+                        <div>
+                          <dt>Suggested priority</dt>
+                          <dd>{recommendation.details.priority}</dd>
+                        </div>
+                        <div>
+                          <dt>Expected effort</dt>
+                          <dd>{recommendation.details.effort}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
             </article>
           ))}
         </div>
@@ -178,12 +232,18 @@ function Recommendations({
 
       {showExports ? (
         <div className="export-report-row" id="report-export">
-          <button className="secondary-button" disabled={!enableJsonExport || isExportingJson || isExportingPdf} onClick={onExportJson}>
-            {isExportingJson ? "Exporting JSON..." : "Export JSON Report"}
-          </button>
-          <button className="secondary-button" disabled={!enablePdfExport || isExportingJson || isExportingPdf} onClick={onExportPdf}>
-            {isExportingPdf ? "Exporting PDF..." : "Export PDF Report"}
-          </button>
+          <div className="export-copy">
+            <span>Evidence exports</span>
+            <p>Download this run as JSON or PDF for review and documentation.</p>
+          </div>
+          <div className="export-actions">
+            <button className="secondary-button" disabled={!enableJsonExport || isExportingJson || isExportingPdf} onClick={onExportJson}>
+              {isExportingJson ? "Exporting JSON..." : "Export JSON Report"}
+            </button>
+            <button className="secondary-button" disabled={!enablePdfExport || isExportingJson || isExportingPdf} onClick={onExportPdf}>
+              {isExportingPdf ? "Exporting PDF..." : "Export PDF Report"}
+            </button>
+          </div>
           {exportMessage ? <span className="export-success">{exportMessage}</span> : null}
           {exportError ? <span className="export-error">{exportError}</span> : null}
         </div>

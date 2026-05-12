@@ -10,7 +10,7 @@ function UploadedResults({ breakdown, onUploadReport, stats, uploadError, upload
     <section className="uploaded-panel" aria-labelledby="uploaded-results-title">
       <div className="section-heading compact">
         <div>
-          <p className="section-kicker">Uploaded Results</p>
+          <p className="section-kicker">Import Results</p>
           <h2 id="uploaded-results-title">Imported AssureBench Report</h2>
           <p className="panel-copy">Upload an exported AssureBench JSON report to inspect it without sending anything to the backend.</p>
         </div>
@@ -62,7 +62,13 @@ function UploadedResults({ breakdown, onUploadReport, stats, uploadError, upload
           {details.length ? <TestResultTable evaluation={evaluation} results={details} /> : null}
         </>
       ) : (
-        <div className="reports-empty">Upload a JSON report to show imported assurance results.</div>
+        <div className="import-empty-state">
+          <span aria-hidden="true" className="import-empty-icon">JSON</span>
+          <div>
+            <strong>No report imported yet.</strong>
+            <p>Upload an AssureBench JSON report to preview its summary, category breakdown, and test results here.</p>
+          </div>
+        </div>
       )}
     </section>
   );

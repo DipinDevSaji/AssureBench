@@ -1,12 +1,105 @@
 import React, { useMemo, useState } from "react";
 import { formatCategoryLabel } from "../utils/categoryLabels";
 
-function getResponsePreview(item) {
-  if (item.response_json) {
-    return JSON.stringify(item.response_json);
+function stringifyValue(value) {
+  if (value === null || value === undefined) {
+    return "";
   }
 
-  return item.response_text || item.response || "";
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function parseMaybeJson(value) {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) {
+    return value;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
+function getResponseObject(item) {
+  if (item.response_json !== null && item.response_json !== undefined) {
+    return parseMaybeJson(item.response_json);
+  }
+
+  if (item.response_text) {
+    return parseMaybeJson(item.response_text);
+  }
+
+  if (item.response !== null && item.response !== undefined) {
+    return parseMaybeJson(item.response);
+  }
+
+  return "";
+}
+
+function getResponseParts(item) {
+  const parsed = getResponseObject(item);
+
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const parts = [];
+    if (parsed.response !== undefined) {
+      parts.push({ label: "Response", value: stringifyValue(parsed.response) });
+    }
+    if (parsed.detail !== undefined) {
+      parts.push({ label: "Detail", value: stringifyValue(parsed.detail) });
+    }
+    if (parsed.result !== undefined) {
+      parts.push({ label: "Result", value: stringifyValue(parsed.result) });
+    }
+    if (parts.length) {
+      return parts;
+    }
+  }
+
+  return [{ label: "", value: stringifyValue(parsed) }];
+}
+
+function getResponsePreview(item) {
+  return getResponseParts(item)
+    .map((part) => (part.label ? `${part.label}: ${part.value}` : part.value))
+    .filter(Boolean)
+    .join(" ");
+}
+
+function ResponseDisplay({ item }) {
+  const parts = getResponseParts(item);
+
+  if (item.error) {
+    return item.error;
+  }
+
+  if (!parts.some((part) => part.value)) {
+    return "No response";
+  }
+
+  return (
+    <div className="response-parts">
+      {parts.map((part) => (
+        <div className="response-part" key={`${part.label}-${part.value}`}>
+          {part.label ? <strong>{part.label}:</strong> : null}
+          <span>{part.value}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function isRisky(item, evaluation) {
@@ -130,7 +223,7 @@ function TestResultTable({ evaluation, results }) {
                     <small>{item.category ? `${formatCategoryLabel(item.category)} / ${item.test_id}` : item.test_id}</small>
                   </td>
                   <td>{item.prompt}</td>
-                  <td className="response-cell">{item.error || response || "No response"}</td>
+                  <td className="response-cell"><ResponseDisplay item={item} /></td>
                   <td>{item.status_code ?? "--"}</td>
                   <td>{item.latency_ms != null ? `${item.latency_ms} ms` : "--"}</td>
                 </tr>

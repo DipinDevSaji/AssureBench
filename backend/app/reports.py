@@ -13,6 +13,170 @@ from reportlab.lib.units import inch
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
+DETAILED_MITIGATION_PLANS = {
+    "prompt_injection": {
+        "why": "Prompt injection can cause a chatbot to ignore instruction hierarchy, reveal hidden prompts, or follow attacker-controlled content.",
+        "steps": [
+            "Separate system, developer, retrieved, and user-controlled content before constructing prompts.",
+            "Add detection for instruction override attempts, hidden prompt requests, and role-confusion patterns.",
+            "Add refusal templates for requests that ask the model to reveal prompts, secrets, or policies.",
+        ],
+        "checklist": [
+            "Known prompt-injection tests are refused without leaking hidden context.",
+            "Retrieved documents are not treated as instructions.",
+            "System and developer instructions are never returned.",
+        ],
+        "owner": "Security / ML",
+        "priority": "High",
+        "effort": "Medium",
+    },
+    "privacy_leakage": {
+        "why": "Privacy leakage can expose personal data, credentials, or customer-sensitive content.",
+        "steps": [
+            "Add pre-response scanning for emails, secrets, API keys, credentials, and personal data.",
+            "Redact or block responses that contain sensitive values unless explicitly authorized.",
+            "Limit retrieved context and tool outputs to the minimum data required.",
+        ],
+        "checklist": [
+            "PII examples are redacted or refused.",
+            "Secrets and API-key-like strings are blocked.",
+            "Logs avoid storing raw sensitive responses.",
+        ],
+        "owner": "Security / Backend",
+        "priority": "High",
+        "effort": "High",
+    },
+    "hallucination": {
+        "why": "Hallucination can produce unsupported claims with false confidence and mislead users.",
+        "steps": [
+            "Require uncertainty language when evidence is missing.",
+            "Add grounding checks for factual claims and citations.",
+            "Penalize confident claims that cannot be traced to evidence.",
+        ],
+        "checklist": [
+            "Unknown factual prompts produce uncertainty.",
+            "Citations point to available evidence.",
+            "Unsupported confident claims are flagged.",
+        ],
+        "owner": "ML / Product",
+        "priority": "Medium",
+        "effort": "Medium",
+    },
+    "unsafe_output": {
+        "why": "Unsafe outputs can provide harmful, illegal, or security-bypass guidance.",
+        "steps": [
+            "Add a safety classifier before and after generation.",
+            "Use refusal templates for illegal activity and harmful instructions.",
+            "Log unsafe attempts with review-safe metadata.",
+        ],
+        "checklist": [
+            "Unsafe instruction prompts are refused.",
+            "Responses avoid actionable harmful steps.",
+            "Unsafe attempts are visible in review logs.",
+        ],
+        "owner": "Security / Backend",
+        "priority": "High",
+        "effort": "Medium",
+    },
+    "format_reliability": {
+        "why": "Format failures break downstream integrations that expect structured output.",
+        "steps": [
+            "Validate structured responses against a JSON schema.",
+            "Retry or repair invalid responses with a constrained format prompt.",
+            "Add tests for required keys and invalid fallback strings.",
+        ],
+        "checklist": [
+            "Required keys are present.",
+            "Invalid JSON strings are repaired or retried.",
+            "Schema failures are reported clearly.",
+        ],
+        "owner": "Backend / ML",
+        "priority": "Medium",
+        "effort": "Low",
+    },
+    "bias": {
+        "why": "Bias can produce discriminatory or stereotyping responses about protected classes.",
+        "steps": [
+            "Add protected-class test prompts.",
+            "Require task-relevant evidence rather than demographic generalizations.",
+            "Track bias regressions during prompt, model, or policy changes.",
+        ],
+        "checklist": [
+            "Protected-class prompts avoid stereotypes.",
+            "Advice is based on relevant facts.",
+            "Bias checks are included in release validation.",
+        ],
+        "owner": "ML / Product",
+        "priority": "High",
+        "effort": "Medium",
+    },
+    "jailbreak": {
+        "why": "Jailbreak attempts try to bypass safety rules through role-play, coercion, or instruction attacks.",
+        "steps": [
+            "Detect role-play, no-rules personas, coercive framing, and policy override language.",
+            "Keep system policy isolated and reinforce instruction hierarchy.",
+            "Maintain regression tests for known jailbreak patterns.",
+        ],
+        "checklist": [
+            "Role-play bypass prompts do not override policy.",
+            "Forbidden requests remain refused after rephrasing.",
+            "Jailbreak variants are tracked across releases.",
+        ],
+        "owner": "Security / ML",
+        "priority": "High",
+        "effort": "Medium",
+    },
+    "data_exfiltration": {
+        "why": "Data exfiltration attempts try to extract logs, environment variables, secrets, or hidden tool outputs.",
+        "steps": [
+            "Apply least-privilege access to retrieved context, tools, logs, and metadata.",
+            "Block outputs that mention internal files, secrets, or hidden tool data.",
+            "Audit tool outputs and retrieved context before model use.",
+        ],
+        "checklist": [
+            "Environment and log extraction prompts are refused.",
+            "Tool outputs are filtered before model use.",
+            "Internal metadata is never exposed.",
+        ],
+        "owner": "Security / Backend",
+        "priority": "High",
+        "effort": "High",
+    },
+    "over_refusal": {
+        "why": "Over-refusal blocks safe user requests and reduces usefulness.",
+        "steps": [
+            "Separate benign requests from genuinely unsafe requests in refusal policy.",
+            "Add examples that reward helpful answers to low-risk prompts.",
+            "Tune refusal templates to offer safe alternatives.",
+        ],
+        "checklist": [
+            "Benign prompts are answered.",
+            "Safety refusals are limited to unsafe content.",
+            "Safe alternatives are offered where possible.",
+        ],
+        "owner": "Product / ML",
+        "priority": "Medium",
+        "effort": "Medium",
+    },
+    "latency": {
+        "why": "High latency damages user experience and can indicate slow retrieval, tools, routing, or infrastructure bottlenecks.",
+        "steps": [
+            "Track p95 latency by endpoint, category, and run.",
+            "Profile slow retrieval, tool calls, model selection, and network paths.",
+            "Add timeouts, caching, streaming, or faster fallback routes.",
+        ],
+        "checklist": [
+            "p95 latency stays within target.",
+            "Slow categories are visible in reports.",
+            "Timeout and fallback behavior is tested.",
+        ],
+        "owner": "Backend / Platform",
+        "priority": "Medium",
+        "effort": "Medium",
+    },
+}
+
+
 RECOMMENDATION_RULES = {
     "prompt_injection": {
         "title": "Prompt Injection",
@@ -153,7 +317,7 @@ def build_recommendations(evaluation: Dict[str, float]) -> List[Dict]:
     recommendations = []
     for key, rule in RECOMMENDATION_RULES.items():
         if float(evaluation.get(key, 0) or 0) > 0:
-            recommendations.append({"category": key, **rule})
+            recommendations.append({"category": key, **rule, "details": DETAILED_MITIGATION_PLANS.get(key)})
     return recommendations
 
 
@@ -315,10 +479,16 @@ def get_exported_report_path(filename: str) -> Path:
         raise ValueError("Invalid report filename")
 
     path = _get_reports_dir() / filename
-    if not path.exists() or path.suffix.lower() not in {".json", ".pdf"}:
+    if not path.exists() or not path.is_file() or path.suffix.lower() not in {".json", ".pdf"}:
         raise FileNotFoundError(filename)
 
     return path
+
+
+def delete_exported_report(filename: str) -> Dict:
+    path = get_exported_report_path(filename)
+    path.unlink()
+    return {"message": "Report deleted successfully", "filename": filename}
 
 
 def export_json_report(run_result: Dict) -> Dict:
@@ -454,6 +624,15 @@ def export_pdf_report(run_result: Dict) -> Dict:
             story.append(Paragraph(str(recommendation.get("title") or recommendation.get("category")), styles["Heading3"]))
             for item in recommendation.get("items", []):
                 story.append(Paragraph(f"- {item}", styles["BodyText"]))
+            details = recommendation.get("details") or {}
+            if details:
+                story.append(Paragraph(f"Why it matters: {details.get('why', '')}", styles["BodyText"]))
+                story.append(
+                    Paragraph(
+                        f"Owner: {details.get('owner', '--')} | Priority: {details.get('priority', recommendation.get('priority', '--'))} | Effort: {details.get('effort', recommendation.get('effort', '--'))}",
+                        styles["BodyText"],
+                    )
+                )
             story.append(Spacer(1, 8))
     else:
         story.append(Paragraph("No category-specific recommendations were triggered.", styles["BodyText"]))

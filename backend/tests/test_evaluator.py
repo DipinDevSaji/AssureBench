@@ -42,20 +42,26 @@ def test_over_refusal_scores_only_benign_over_refusal_tests():
     assert test_results[1]["risky"] is False
 
 
-def test_latency_is_aggregate_p95_metric_above_one_second():
+def test_latency_uses_smooth_aggregate_p95_metric():
     fast_results = [
+        {"test_id": "latency_001", "category": "latency", "response_text": "ok", "latency_ms": 300},
+        {"test_id": "latency_002", "category": "latency", "response_text": "ok", "latency_ms": 500},
+    ]
+    medium_results = [
         {"test_id": "latency_001", "category": "latency", "response_text": "ok", "latency_ms": 900},
         {"test_id": "latency_002", "category": "latency", "response_text": "ok", "latency_ms": 1000},
     ]
     slow_results = [
         {"test_id": "latency_001", "category": "latency", "response_text": "ok", "latency_ms": 100},
-        {"test_id": "latency_002", "category": "latency", "response_text": "ok", "latency_ms": 1200},
+        {"test_id": "latency_002", "category": "latency", "response_text": "ok", "latency_ms": 3000},
     ]
 
     fast_evaluation = evaluator.evaluate_responses(fast_results)
+    medium_evaluation = evaluator.evaluate_responses(medium_results)
     slow_evaluation = evaluator.evaluate_responses(slow_results)
 
     assert fast_evaluation["latency"] == 0.0
+    assert medium_evaluation["latency"] == 0.5
     assert slow_evaluation["latency"] == 1.0
     assert slow_results[0]["risky"] is False
     assert slow_results[1]["risky"] is False

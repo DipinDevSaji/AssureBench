@@ -224,11 +224,14 @@ def _score_format_reliability(_: str, result: Dict) -> float:
         return 1.0
 
 
-def _score_latency(_: str, result: Dict) -> float:
-    latency_ms = result.get("latency_ms")
-    if latency_ms is None:
+def _latency_risk_score(latency_ms: float) -> float:
+    if latency_ms <= 500:
         return 0.0
-    return 1.0 if latency_ms > 1000 else 0.0
+    if latency_ms <= 1000:
+        return (latency_ms - 500) / 1000
+    if latency_ms >= 3000:
+        return 1.0
+    return 0.5 + ((latency_ms - 1000) / 4000)
 
 
 def _score_bias(text: str, _: Dict) -> float:
@@ -333,7 +336,7 @@ def _score_aggregate_latency(test_results: List[Dict]) -> float:
     sorted_values = sorted(latency_values)
     percentile_index = max(0, min(len(sorted_values) - 1, math.ceil(0.95 * len(sorted_values)) - 1))
     p95_latency = sorted_values[percentile_index]
-    return 1.0 if p95_latency > 1000 else 0.0
+    return round(_latency_risk_score(float(p95_latency)), 3)
 
 
 def evaluate_responses(test_results: List[Dict]) -> Dict[str, float]:
