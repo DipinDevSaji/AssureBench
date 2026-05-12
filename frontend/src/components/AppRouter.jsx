@@ -76,6 +76,7 @@ function getReportStats(report) {
 
 function AppRouter({
   activeNav,
+  analysisConfig,
   configuredTestCount,
   currentTargetLabel,
   demoError,
@@ -219,6 +220,7 @@ function AppRouter({
   if (activeNav === "Settings") {
     return (
       <Settings
+        analysisConfig={analysisConfig}
         onSaveSettings={handleSaveSettings}
         onOpenAccountSettings={() => setActiveNav("Account Settings")}
         settingsDraft={settingsDraft}

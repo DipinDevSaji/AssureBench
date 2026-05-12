@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   API_BASE,
   clearStoredToken,
+  fetchAnalysisConfig,
   fetchCurrentUser,
   getStoredToken,
   loginUser,
@@ -198,6 +199,7 @@ function App() {
   const [activeNav, setActiveNav] = useState("Overview");
   const [expandedSuite, setExpandedSuite] = useState(null);
   const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
+  const [analysisConfig, setAnalysisConfig] = useState({ enabled: false, provider: "disabled", redact_pii: true });
 
   const hasRun = Boolean(run);
   const canAccessAdmin = ["owner", "admin"].includes(user?.role);
@@ -223,6 +225,16 @@ function App() {
         setAuthStatus("logged-out");
       });
   }, []);
+
+  useEffect(() => {
+    if (authStatus !== "logged-in") {
+      return;
+    }
+
+    fetchAnalysisConfig()
+      .then(setAnalysisConfig)
+      .catch(() => setAnalysisConfig({ enabled: false, provider: "disabled", redact_pii: true }));
+  }, [authStatus]);
 
   const lastRunLabel = useMemo(() => {
     if (!run?.run_id) {
@@ -412,6 +424,7 @@ function App() {
 
         <AppRouter
           activeNav={effectiveActiveNav}
+          analysisConfig={analysisConfig}
           configuredTestCount={configuredTestCount}
           currentTargetLabel={currentTargetLabel}
           demoEndpoint={DEFAULT_ENDPOINT}

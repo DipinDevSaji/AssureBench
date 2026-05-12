@@ -74,6 +74,11 @@ export async function fetchCurrentUser() {
   return response.json();
 }
 
+export async function fetchAnalysisConfig() {
+  const response = await apiFetch("/analysis/config");
+  return response.json();
+}
+
 export async function fetchAdminUsers() {
   const response = await apiFetch("/admin/users");
   const payload = await response.json();

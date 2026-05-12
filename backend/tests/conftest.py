@@ -11,6 +11,8 @@ def isolated_test_state(tmp_path, monkeypatch):
     monkeypatch.setenv("ASSUREBENCH_OWNER_NAME", "Owner")
     monkeypatch.setenv("ASSUREBENCH_OWNER_EMAIL", "owner@example.com")
     monkeypatch.setenv("ASSUREBENCH_OWNER_PASSWORD", "owner-password")
+    monkeypatch.setenv("ASSUREBENCH_EXTERNAL_ANALYSIS_ENABLED", "false")
+    monkeypatch.setenv("ASSUREBENCH_ANALYSIS_PROVIDER", "disabled")
     auth.initialize_auth_storage()
     rate_limiter.reset_rate_limits()
     yield

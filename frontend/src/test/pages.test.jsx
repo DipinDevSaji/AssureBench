@@ -15,7 +15,7 @@ import Sidebar from "../components/Sidebar";
 import AccountSettings from "../pages/AccountSettings";
 import { testSuites } from "../data/testSuites";
 import App from "../App";
-import { changePassword, createAdminUser, deleteReport, fetchReports, loginUser, runAssurance, submitAccessRequest } from "../api";
+import { changePassword, createAdminUser, deleteReport, fetchAnalysisConfig, fetchReports, loginUser, runAssurance, submitAccessRequest } from "../api";
 
 vi.mock("../api", () => ({
   API_BASE: "http://127.0.0.1:8000",
@@ -49,6 +49,7 @@ vi.mock("../api", () => ({
       created_at: "2026-05-11T10:00:00Z",
     },
   ]),
+  fetchAnalysisConfig: vi.fn(async () => ({ enabled: false, provider: "disabled", redact_pii: true })),
   fetchAdminUsers: vi.fn(async () => [
     {
       id: 1,
@@ -414,6 +415,7 @@ describe("dashboard pages", () => {
     render(
       <AppRouter
         activeNav="Admin Users"
+        analysisConfig={{ enabled: false, provider: "disabled", redact_pii: true }}
         configuredTestCount={30}
         currentTargetLabel="Built-in Demo"
         demoEndpoint="http://127.0.0.1:8000/demo-chatbot"
@@ -868,6 +870,7 @@ describe("dashboard pages", () => {
   test("Settings page shows account and security cards without placeholder wording", () => {
     render(
       <Settings
+        analysisConfig={{ enabled: true, provider: "openai", redact_pii: true }}
         onOpenAccountSettings={vi.fn()}
         onSaveSettings={vi.fn()}
         settingsDraft={{
@@ -887,6 +890,8 @@ describe("dashboard pages", () => {
     expect(screen.getByText("owner@example.com")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Change Password/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Security/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /External AI analysis/i })).toBeInTheDocument();
+    expect(screen.getByText("openai")).toBeInTheDocument();
     expect(screen.getByText("Public account creation")).toBeInTheDocument();
     expect(screen.getByText("Disabled")).toBeInTheDocument();
     expect(screen.getByLabelText(/Built-in Demo Chatbot/i)).toHaveValue("http://127.0.0.1:8000/demo-chatbot");
@@ -896,6 +901,7 @@ describe("dashboard pages", () => {
   test("Settings page is read-only for normal users", () => {
     render(
       <Settings
+        analysisConfig={{ enabled: false, provider: "disabled", redact_pii: true }}
         onOpenAccountSettings={vi.fn()}
         onSaveSettings={vi.fn()}
         settingsDraft={{

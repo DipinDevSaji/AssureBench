@@ -78,6 +78,7 @@ function RunResults({ hasRun, onReportExported, onViewRecommendations, run, sett
   const averageLatency = getAverageLatency(details);
   const totalTestCount = summary.test_count ?? details.length;
   const fullCategoryBreakdown = getCategoryBreakdown(details, evaluation);
+  const externalAnalysis = summary.external_analysis;
   const riskyTestCount = details.filter(isItemRisky).length;
   const passedTestCount = Math.max(0, details.length - riskyTestCount);
   const passRate = details.length ? Math.round((passedTestCount / details.length) * 100) : 0;
@@ -177,6 +178,38 @@ function RunResults({ hasRun, onReportExported, onViewRecommendations, run, sett
             <CategoryChart categories={fullCategoryBreakdown} />
           </div>
           <FullCategoryBreakdown categories={fullCategoryBreakdown} />
+          {externalAnalysis?.enabled ? (
+            <section className="recommendations-panel external-analysis-panel" aria-labelledby="external-analysis-title">
+              <div className="section-heading compact">
+                <div>
+                  <p className="section-kicker">External AI analysis</p>
+                  <h2 id="external-analysis-title">Provider Enrichment</h2>
+                  <p className="panel-copy">
+                    Optional provider analysis enriched this run without replacing AssureBench scoring.
+                  </p>
+                </div>
+                <span className="report-count">{externalAnalysis.provider}</span>
+              </div>
+              <div className="overview-grid">
+                <article className="overview-card">
+                  <span>Analyzed tests</span>
+                  <strong>{externalAnalysis.analyzed_tests}</strong>
+                </article>
+                <article className="overview-card">
+                  <span>High findings</span>
+                  <strong>{externalAnalysis.high_findings}</strong>
+                </article>
+                <article className="overview-card">
+                  <span>Elevated findings</span>
+                  <strong>{externalAnalysis.elevated_findings}</strong>
+                </article>
+                <article className="overview-card">
+                  <span>Redaction</span>
+                  <strong>{externalAnalysis.redacted ? "On" : "Off"}</strong>
+                </article>
+              </div>
+            </section>
+          ) : null}
           <div id="recommendations">
             <Recommendations
               evaluation={evaluation}

@@ -1,6 +1,6 @@
 import React from "react";
 
-function Settings({ onOpenAccountSettings, onSaveSettings, settingsDraft, settingsMessage, setSettingsDraft, user }) {
+function Settings({ analysisConfig, onOpenAccountSettings, onSaveSettings, settingsDraft, settingsMessage, setSettingsDraft, user }) {
   const canEditWorkspaceSettings = ["owner", "admin"].includes(user?.role);
 
   return (
@@ -156,6 +156,32 @@ function Settings({ onOpenAccountSettings, onSaveSettings, settingsDraft, settin
               <dd><span className="status-badge inactive">Disabled</span></dd>
             </div>
           </dl>
+        </article>
+
+        <article className="settings-card">
+          <div className="settings-card-heading">
+            <span>Read-only</span>
+            <h3>External AI analysis</h3>
+          </div>
+          <dl className="settings-list security-list">
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <span className={`status-badge ${analysisConfig?.enabled ? "passed" : "inactive"}`}>
+                  {analysisConfig?.enabled ? "Enabled" : "Disabled"}
+                </span>
+              </dd>
+            </div>
+            <div>
+              <dt>Provider</dt>
+              <dd>{analysisConfig?.provider || "disabled"}</dd>
+            </div>
+            <div>
+              <dt>PII redaction</dt>
+              <dd>{analysisConfig?.redact_pii ? "Enabled" : "Disabled"}</dd>
+            </div>
+          </dl>
+          <p className="settings-note">Provider keys are backend-only environment variables and are never exposed in the frontend.</p>
         </article>
       </div>
       <div className="settings-actions">

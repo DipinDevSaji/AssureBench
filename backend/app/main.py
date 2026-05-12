@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 
-from . import sample_tests, evaluator, ml_risk, demo_chatbot, reports, test_runner, rate_limiter, auth
+from . import sample_tests, evaluator, ml_risk, demo_chatbot, reports, test_runner, rate_limiter, auth, analysis
 
 app = FastAPI(title="AssureBench API", version="0.1.0")
 
@@ -271,8 +271,11 @@ async def run_tests(request: RunRequest):
             endpoint_url, test_definitions, api_key=request.api_key
         )
         evaluated = evaluator.evaluate_responses(results)
+        external_analysis = await analysis.enrich_results_with_external_analysis(results)
         risk = ml_risk.compute_risk_score(evaluated, results)
         report = reports.build_report(endpoint_url, results, evaluated, risk)
+        if external_analysis:
+            report["summary"]["external_analysis"] = external_analysis
         return {
             "run_id": report["run_id"],
             "summary": report["summary"],
@@ -307,6 +310,11 @@ async def list_reports(current_user: dict = Depends(auth.get_current_user)):
         return {"reports": reports.list_exported_reports(current_user)}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/analysis/config")
+async def get_analysis_config(current_user: dict = Depends(auth.get_current_user)):
+    return analysis.get_public_config()
 
 @app.get("/reports/{filename}")
 async def get_report_file(filename: str, current_user: dict = Depends(auth.get_current_user)):

@@ -576,6 +576,8 @@ def export_json_report(run_result: Dict, current_user: Optional[Dict] = None) ->
         "details": details,
         "failed_or_risky_tests": get_failed_or_risky_tests(details, evaluation),
     }
+    if summary.get("external_analysis"):
+        report["external_analysis"] = summary["external_analysis"]
 
     filename = f"assurebench_report_{metadata['safe_run_id']}_{metadata['timestamp']}.json"
     path = _get_user_reports_dir(current_user) / filename
@@ -646,6 +648,14 @@ def export_pdf_report(run_result: Dict, current_user: Optional[Dict] = None) -> 
         ["Risky tests", str(risky_tests)],
         ["Pass rate", f"{pass_rate}%"],
     ]
+    if summary.get("external_analysis"):
+        external = summary["external_analysis"]
+        summary_rows.extend(
+            [
+                ["External AI analysis", f"{external.get('provider', 'unknown')} ({external.get('analyzed_tests', 0)} tests)"],
+                ["External analysis findings", f"High: {external.get('high_findings', 0)} / Elevated: {external.get('elevated_findings', 0)}"],
+            ]
+        )
     summary_table = Table(summary_rows, colWidths=[1.7 * inch, 5.0 * inch])
     summary_table.setStyle(
         TableStyle(

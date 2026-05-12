@@ -252,6 +252,7 @@ Useful endpoints:
 - `POST /reports/pdf`
 - `GET /reports`
 - `GET /reports/{filename}`
+- `GET /analysis/config`
 
 AssureBench includes prototype in-memory rate limiting for high-cost routes such as assurance runs and report exports. This is suitable for local/demo deployments. For production or multi-instance deployments, this should be replaced with Redis-backed or gateway-level distributed rate limiting.
 
@@ -306,6 +307,40 @@ Users without an account can submit an access request from the login page. Assur
 2. The owner or an admin reviews the request in the Admin Users page.
 3. Payment is handled manually outside the app, such as by sending a payment link.
 4. After approval/payment, the owner or an admin creates customer credentials from the Admin Users page. The owner can also create admin accounts for trusted people.
+
+## Enterprise AI Analysis Integrations
+
+AssureBench includes an optional external AI analysis layer for enterprise-style review of test prompts, chatbot responses, test metadata, and existing AssureBench risk results. This layer enriches the report with extra findings and recommendations, but it does not replace the built-in scoring logic.
+
+External analysis is disabled by default. When disabled, prompts and chatbot outputs are not sent to any external provider and app behavior stays the same.
+
+Supported runtime analysis providers for this prototype:
+
+- OpenAI
+- Anthropic Claude
+- Disabled provider
+- Custom webhook placeholder for future integration
+
+Codex and Cursor are developer workflow tools for building and reviewing code. They are not runtime analysis providers in AssureBench. OpenAI and Claude are the optional model analysis providers.
+
+Privacy warning: enabling external analysis may send test prompts, chatbot responses, test metadata, and existing risk results to the selected provider. Provider API keys are backend-only environment variables and must never be exposed in the frontend or committed to Git.
+
+Safe placeholder configuration:
+
+```text
+ASSUREBENCH_EXTERNAL_ANALYSIS_ENABLED=false
+ASSUREBENCH_ANALYSIS_PROVIDER=disabled
+OPENAI_API_KEY=
+OPENAI_ANALYSIS_MODEL=gpt-4o-mini
+ANTHROPIC_API_KEY=
+ANTHROPIC_ANALYSIS_MODEL=claude-3-5-haiku-latest
+ASSUREBENCH_ANALYSIS_REDACT_PII=true
+ASSUREBENCH_ANALYSIS_TIMEOUT_SECONDS=20
+```
+
+Before sending data to a provider, AssureBench can redact emails, phone numbers, bearer tokens, obvious API keys, and password/secret-looking strings. This is a prototype safeguard, not a replacement for a full data-loss-prevention system.
+
+Future production improvements should include organization-level provider settings, per-workspace provider keys, explicit consent controls, audit logs, stronger PII detection, and Postgres-backed analysis history.
 
 ## How to Run Frontend
 
@@ -374,6 +409,10 @@ ASSUREBENCH_OWNER_PASSWORD=change-this-password
 ASSUREBENCH_JWT_SECRET=change-this-secret
 ASSUREBENCH_ALLOWED_ORIGINS=https://your-vercel-app.vercel.app
 ASSUREBENCH_DATA_DIR=/data
+ASSUREBENCH_EXTERNAL_ANALYSIS_ENABLED=false
+ASSUREBENCH_ANALYSIS_PROVIDER=disabled
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
 ```
 
 Do not commit real credentials. `backend/.env.example` contains safe local placeholders only.
@@ -547,6 +586,7 @@ The backend safely serves report files through `GET /reports/{filename}` and rej
 - Add CI/CD integration for automated assurance checks before deployment.
 - Add richer PDF branding and executive summaries.
 - Add support for external LLM providers and API key management.
+- Add organization-level AI analysis provider settings, consent controls, audit logs, stronger PII detection, and Postgres-backed analysis history.
 - Add severity-weighted category scoring.
 - Replace in-memory rate limiting with Redis-backed rate limiting for horizontal scaling. The current in-memory limiter is acceptable for the local/single-instance prototype.
 - Move generated reports from local filesystem storage to persistent cloud report storage.
