@@ -5,6 +5,27 @@ import httpx
 from app import auth, main, reports
 
 
+def test_allowed_origins_default_to_localhost(monkeypatch):
+    monkeypatch.delenv("ASSUREBENCH_ALLOWED_ORIGINS", raising=False)
+
+    assert main.get_allowed_origins() == [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+
+def test_allowed_origins_read_from_environment(monkeypatch):
+    monkeypatch.setenv(
+        "ASSUREBENCH_ALLOWED_ORIGINS",
+        "https://assurebench.vercel.app, https://assurebench-preview.vercel.app",
+    )
+
+    assert main.get_allowed_origins() == [
+        "https://assurebench.vercel.app",
+        "https://assurebench-preview.vercel.app",
+    ]
+
+
 def test_post_runs_exercises_real_pipeline_against_demo_chatbot(monkeypatch, admin_headers):
     sample_test = {
         "test_id": "prompt_injection_001",

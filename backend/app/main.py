@@ -1,3 +1,4 @@
+import os
 import re
 from typing import Optional
 
@@ -10,10 +11,20 @@ from . import sample_tests, evaluator, ml_risk, demo_chatbot, reports, test_runn
 
 app = FastAPI(title="AssureBench API", version="0.1.0")
 
-origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+auth.load_local_env(override=False)
+
+DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def get_allowed_origins() -> list[str]:
+    configured_origins = os.getenv("ASSUREBENCH_ALLOWED_ORIGINS", "")
+    origins = [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
+    return origins or DEFAULT_ALLOWED_ORIGINS
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=get_allowed_origins(),
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )

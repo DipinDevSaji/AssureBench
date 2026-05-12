@@ -350,12 +350,42 @@ The frontend API base URL can be configured with `VITE_API_BASE_URL`. See `front
 
 This is a prototype deployment guide for hosting AssureBench outside local development.
 
-Deploy the FastAPI backend first on a service such as Render, Fly.io, Railway, or another Python-capable host. The backend must expose the same API routes used locally, including `/runs`, `/demo-chatbot`, `/safe-demo-chatbot`, `/risky-demo-chatbot`, `/reports/json`, `/reports/pdf`, and `/reports`.
+### Backend on Hugging Face Spaces
+
+The backend includes `backend/Dockerfile` for Docker-based Hugging Face Spaces deployment. Create a new Hugging Face Space using the Docker SDK, deploy the backend folder, and expose FastAPI on port `7860`.
+
+The container starts with:
+
+```text
+uvicorn app.main:app --host 0.0.0.0 --port 7860
+```
+
+Set these Space secrets or environment variables in Hugging Face:
+
+```text
+ASSUREBENCH_OWNER_NAME=Owner
+ASSUREBENCH_OWNER_EMAIL=owner@example.com
+ASSUREBENCH_OWNER_PASSWORD=change-this-password
+ASSUREBENCH_JWT_SECRET=change-this-secret
+ASSUREBENCH_ALLOWED_ORIGINS=https://your-vercel-app.vercel.app
+```
+
+Do not commit real credentials. `backend/.env.example` contains safe local placeholders only.
+
+After deployment, confirm the backend is reachable by checking:
+
+```text
+https://your-hugging-face-space.hf.space/health
+```
+
+The backend must expose the same API routes used locally, including `/runs`, `/demo-chatbot`, `/safe-demo-chatbot`, `/risky-demo-chatbot`, `/reports/json`, `/reports/pdf`, and `/reports`.
+
+### Frontend on Vercel
 
 After the backend is deployed, configure the frontend with the deployed backend URL:
 
 ```text
-VITE_API_BASE_URL=https://your-deployed-backend.example.com
+VITE_API_BASE_URL=https://your-hugging-face-space.hf.space
 ```
 
 The local default is documented in `frontend/.env.example`:
@@ -364,7 +394,14 @@ The local default is documented in `frontend/.env.example`:
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-Then build the frontend:
+In Vercel, use:
+
+- Root directory: `frontend`
+- Build command: `npm run build`
+- Output directory: `dist`
+- Environment variable: `VITE_API_BASE_URL=https://your-hugging-face-space.hf.space`
+
+Then build locally if you want to verify before deployment:
 
 ```powershell
 cd frontend
@@ -372,12 +409,15 @@ npm install
 npm run build
 ```
 
-For Render/Fly.io-style deployment, the usual order is:
+Prototype deployment order:
 
-1. Deploy the FastAPI backend and confirm `/health` works.
-2. Set `VITE_API_BASE_URL` in the frontend environment to the deployed backend URL.
-3. Build the frontend with `npm run build`.
-4. Serve the generated `frontend/dist` directory from a static hosting provider.
+1. Deploy the FastAPI backend on Hugging Face Spaces and confirm `/health` works.
+2. Deploy the frontend on Vercel.
+3. Set `VITE_API_BASE_URL` in Vercel to the deployed backend URL.
+4. Set `ASSUREBENCH_ALLOWED_ORIGINS` in the backend to the Vercel frontend URL.
+5. Build the frontend with `npm run build`.
+
+This is an honest prototype deployment guide. For production, use managed secrets, persistent database storage, persistent report storage, and distributed rate limiting.
 
 ## How to Run Assurance Tests
 
