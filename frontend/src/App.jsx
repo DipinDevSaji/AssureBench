@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   API_BASE,
   clearStoredToken,
@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS = {
   enableJsonExport: true,
   enablePdfExport: true,
 };
+const DEFAULT_ANALYSIS_CONFIG = { enabled: false, provider: "disabled", redact_pii: true };
 
 const baseWorkspaceNav = [
   "Overview",
@@ -199,7 +200,8 @@ function App() {
   const [activeNav, setActiveNav] = useState("Overview");
   const [expandedSuite, setExpandedSuite] = useState(null);
   const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
-  const [analysisConfig, setAnalysisConfig] = useState({ enabled: false, provider: "disabled", redact_pii: true });
+  const [analysisConfig, setAnalysisConfig] = useState(DEFAULT_ANALYSIS_CONFIG);
+  const mainContentRef = useRef(null);
 
   const hasRun = Boolean(run);
   const canAccessAdmin = ["owner", "admin"].includes(user?.role);
@@ -233,8 +235,17 @@ function App() {
 
     fetchAnalysisConfig()
       .then(setAnalysisConfig)
-      .catch(() => setAnalysisConfig({ enabled: false, provider: "disabled", redact_pii: true }));
+      .catch(() => setAnalysisConfig(DEFAULT_ANALYSIS_CONFIG));
   }, [authStatus]);
+
+  useEffect(() => {
+    if (authStatus !== "logged-in") {
+      return;
+    }
+
+    mainContentRef.current?.scrollTo?.({ top: 0, left: 0 });
+    window.scrollTo?.({ top: 0, left: 0 });
+  }, [activeNav, authStatus]);
 
   const lastRunLabel = useMemo(() => {
     if (!run?.run_id) {
@@ -253,6 +264,7 @@ function App() {
     setDemoStatus("idle");
     setDemoError("");
     setProductionRun(null);
+    setProductionEndpointUrl("");
     setProductionStatus("idle");
     setProductionError("");
     setUploadedReport(null);
@@ -260,6 +272,9 @@ function App() {
     setRun(null);
     setStatus("idle");
     setError("");
+    setEndpointUrl(settings.defaultEndpointUrl);
+    setExpandedSuite(null);
+    setAnalysisConfig(DEFAULT_ANALYSIS_CONFIG);
   }
 
   async function handleRun() {
@@ -396,7 +411,7 @@ function App() {
         workspaceNav={workspaceNav}
       />
 
-      <main className="dashboard-main">
+      <main className="dashboard-main" ref={mainContentRef}>
         <header className="topbar" id={effectiveActiveNav.toLowerCase().replaceAll(" ", "-")}>
           <div>
             <p className="eyebrow">{pageCopy[effectiveActiveNav].kicker}</p>

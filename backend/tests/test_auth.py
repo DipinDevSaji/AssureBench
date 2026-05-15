@@ -448,6 +448,7 @@ def test_access_request_can_be_submitted():
     assert payload["request"]["status"] == "pending"
     assert payload["request"]["email"] == "dipin@example.com"
     assert payload["request"]["company_or_project"] == ""
+    assert payload["request"]["message"] == ""
 
 
 def test_access_request_missing_required_fields_fails_validation():
@@ -475,6 +476,7 @@ def test_admin_can_list_access_requests(admin_headers):
 
     assert response.status_code == 200
     assert response.json()["access_requests"][0]["full_name"] == "Dipin Test"
+    assert response.json()["access_requests"][0]["message"] == "Please review my access request."
 
 
 def test_non_admin_cannot_list_access_requests():

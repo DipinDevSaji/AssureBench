@@ -40,11 +40,13 @@ function getProtectedReason(currentUser, targetUser) {
 function AdminUsers({ currentUser }) {
   const [users, setUsers] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
+  const [selectedAccessRequestId, setSelectedAccessRequestId] = useState(null);
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "user" });
   const canCreateAdmin = currentUser?.role === "owner";
+  const selectedAccessRequest = accessRequests.find((request) => request.id === selectedAccessRequestId);
 
   async function loadUsers() {
     setStatus("loading");
@@ -259,16 +261,25 @@ function AdminUsers({ currentUser }) {
                 <td>{request.status}</td>
                 <td>{request.created_at ? new Date(request.created_at).toLocaleString() : "--"}</td>
                 <td>
-                  <select
-                    aria-label={`Update status for ${request.full_name}`}
-                    value={request.status}
-                    onChange={(event) => handleAccessRequestStatus(request.id, event.target.value)}
-                  >
-                    <option value="pending">pending</option>
-                    <option value="contacted">contacted</option>
-                    <option value="approved">approved</option>
-                    <option value="rejected">rejected</option>
-                  </select>
+                  <div className="access-request-actions">
+                    <button
+                      className="secondary-button"
+                      onClick={() => setSelectedAccessRequestId((current) => (current === request.id ? null : request.id))}
+                      type="button"
+                    >
+                      {selectedAccessRequestId === request.id ? "Hide details" : "View details"}
+                    </button>
+                    <select
+                      aria-label={`Update status for ${request.full_name}`}
+                      value={request.status}
+                      onChange={(event) => handleAccessRequestStatus(request.id, event.target.value)}
+                    >
+                      <option value="pending">pending</option>
+                      <option value="contacted">contacted</option>
+                      <option value="approved">approved</option>
+                      <option value="rejected">rejected</option>
+                    </select>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -276,6 +287,52 @@ function AdminUsers({ currentUser }) {
         </table>
         {!accessRequests.length ? <div className="reports-empty">No access requests yet.</div> : null}
       </div>
+
+      {selectedAccessRequest ? (
+        <section className="access-request-details" aria-label={`Access request details for ${selectedAccessRequest.full_name}`}>
+          <div className="section-heading compact">
+            <div>
+              <p className="section-kicker">Request details</p>
+              <h3>{selectedAccessRequest.full_name}</h3>
+            </div>
+            <span className="status-badge inactive">{selectedAccessRequest.status}</span>
+          </div>
+          <dl>
+            <div>
+              <dt>Name</dt>
+              <dd>{selectedAccessRequest.full_name}</dd>
+            </div>
+            <div>
+              <dt>Email</dt>
+              <dd>{selectedAccessRequest.email}</dd>
+            </div>
+            <div>
+              <dt>Company / Project</dt>
+              <dd>{selectedAccessRequest.company_or_project || "--"}</dd>
+            </div>
+            <div>
+              <dt>Intended use</dt>
+              <dd>{selectedAccessRequest.intended_use}</dd>
+            </div>
+            <div>
+              <dt>Expected usage</dt>
+              <dd>{selectedAccessRequest.expected_usage}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{selectedAccessRequest.status}</dd>
+            </div>
+            <div>
+              <dt>Created date</dt>
+              <dd>{selectedAccessRequest.created_at ? new Date(selectedAccessRequest.created_at).toLocaleString() : "--"}</dd>
+            </div>
+            <div className="access-request-message">
+              <dt>Message / Additional details</dt>
+              <dd>{selectedAccessRequest.message || "No message provided."}</dd>
+            </div>
+          </dl>
+        </section>
+      ) : null}
     </section>
   );
 }

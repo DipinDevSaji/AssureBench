@@ -1024,6 +1024,56 @@ h2 {
   margin-top: 28px;
 }
 
+.access-request-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.access-request-details {
+  margin-top: 18px;
+  border: 1px solid #dbe5ee;
+  border-radius: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, #ffffff, #f7fbfc);
+}
+
+.access-request-details h3 {
+  margin: 0;
+}
+
+.access-request-details dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 18px 0 0;
+}
+
+.access-request-details dt {
+  margin-bottom: 5px;
+  color: #526273;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.access-request-details dd {
+  margin: 0;
+  color: #17202a;
+}
+
+.access-request-message {
+  grid-column: 1 / -1;
+}
+
+.access-request-message dd {
+  border-radius: 12px;
+  padding: 14px;
+  background: #eef7f8;
+  white-space: pre-wrap;
+}
+
 .settings-panel,
 .suite-panel,
 .uploaded-panel {
@@ -1971,6 +2021,20 @@ h2 {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.remediation-preview {
+  margin: 14px 0 0;
+  padding: 14px;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid rgba(15, 91, 112, 0.14);
+  border-radius: 14px;
+  background: #f8fbfc;
+  color: #253342;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .export-success,
@@ -2989,6 +3053,15 @@ tbody tr:hover {
   .capability-grid,
   .workflow-grid,
   .admin-user-form {
+    grid-template-columns: 1fr;
+  }
+
+  .access-request-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .access-request-details dl {
     grid-template-columns: 1fr;
   }
 

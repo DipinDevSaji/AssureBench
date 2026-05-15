@@ -183,6 +183,36 @@ function Settings({ analysisConfig, onOpenAccountSettings, onSaveSettings, setti
           </dl>
           <p className="settings-note">Provider keys are backend-only environment variables and are never exposed in the frontend.</p>
         </article>
+
+        <article className="settings-card">
+          <div className="settings-card-heading">
+            <span>Manual workflow</span>
+            <h3>Developer Remediation Integrations</h3>
+          </div>
+          <dl className="settings-list security-list">
+            <div>
+              <dt>Codex</dt>
+              <dd>Manual copy/paste supported</dd>
+            </div>
+            <div>
+              <dt>Cursor</dt>
+              <dd>Manual copy/paste supported</dd>
+            </div>
+            <div>
+              <dt>GitHub Issues</dt>
+              <dd>Future integration</dd>
+            </div>
+            <div>
+              <dt>Jira/Linear</dt>
+              <dd>Future integration</dd>
+            </div>
+            <div>
+              <dt>Webhook</dt>
+              <dd>Future integration</dd>
+            </div>
+          </dl>
+          <p className="settings-note">AssureBench does not automatically modify code or send remediation briefs to developer tools.</p>
+        </article>
       </div>
       <div className="settings-actions">
         <button className="primary-button" disabled={!canEditWorkspaceSettings} onClick={onSaveSettings}>

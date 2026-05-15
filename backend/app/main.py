@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 
-from . import sample_tests, evaluator, ml_risk, demo_chatbot, reports, test_runner, rate_limiter, auth, analysis
+from . import sample_tests, evaluator, ml_risk, demo_chatbot, reports, test_runner, rate_limiter, auth, analysis, remediation
 
 app = FastAPI(title="AssureBench API", version="0.1.0")
 
@@ -28,6 +28,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+LATEST_RUNS_BY_USER: dict[int, dict] = {}
 
 class RunRequest(BaseModel):
     endpoint_url: str
@@ -54,6 +56,18 @@ class ReportRequest(BaseModel):
     endpoint_url: Optional[str] = None
     recommendations: Optional[list] = None
     risk_level: Optional[str] = None
+
+class RemediationPackageRequest(BaseModel):
+    run_id: Optional[str] = None
+    format: str = "markdown"
+
+    @field_validator("format")
+    @classmethod
+    def validate_format(cls, value):
+        value = str(value).lower().strip()
+        if value not in {"json", "markdown"}:
+            raise ValueError("format must be json or markdown")
+        return value
 
 class LoginRequest(BaseModel):
     email: str
@@ -261,9 +275,9 @@ async def patch_admin_access_request(request_id: int, request: AccessRequestUpda
 @app.post(
     "/runs",
     response_model=RunResponse,
-    dependencies=[Depends(auth.get_current_user), Depends(rate_limiter.rate_limit_dependency("/runs"))],
+    dependencies=[Depends(rate_limiter.rate_limit_dependency("/runs"))],
 )
-async def run_tests(request: RunRequest):
+async def run_tests(request: RunRequest, current_user: dict = Depends(auth.get_current_user)):
     try:
         test_definitions = sample_tests.get_sample_tests()
         endpoint_url = str(request.endpoint_url)
@@ -276,6 +290,7 @@ async def run_tests(request: RunRequest):
         report = reports.build_report(endpoint_url, results, evaluated, risk)
         if external_analysis:
             report["summary"]["external_analysis"] = external_analysis
+        LATEST_RUNS_BY_USER[current_user["id"]] = report
         return {
             "run_id": report["run_id"],
             "summary": report["summary"],
@@ -283,6 +298,28 @@ async def run_tests(request: RunRequest):
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+def _get_remediation_run(run_id: Optional[str], current_user: dict) -> dict:
+    latest_run = LATEST_RUNS_BY_USER.get(current_user["id"])
+    if run_id and latest_run and latest_run.get("run_id") == run_id:
+        return latest_run
+    if not run_id and latest_run:
+        return latest_run
+    if run_id:
+        return reports.find_json_report_by_run_id(run_id, current_user)
+    return reports.find_latest_json_report(current_user)
+
+
+@app.post("/remediation/package")
+async def create_remediation_package(request: RemediationPackageRequest, current_user: dict = Depends(auth.get_current_user)):
+    try:
+        run_result = _get_remediation_run(request.run_id, current_user)
+        return remediation.build_package(run_result, request.format)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Run or report not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 @app.post(
     "/reports/json",

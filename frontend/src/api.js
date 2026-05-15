@@ -157,6 +157,15 @@ export async function exportPdfReport(runResult) {
   return response.json();
 }
 
+export async function generateRemediationPackage(runId, format = "markdown") {
+  const response = await apiFetch("/remediation/package", {
+    method: "POST",
+    body: JSON.stringify({ run_id: runId, format }),
+  });
+
+  return response.json();
+}
+
 export async function fetchReports() {
   const response = await apiFetch("/reports");
 

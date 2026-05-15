@@ -4,7 +4,7 @@ import TestResultTable from "../components/TestResultTable";
 import CategoryChart from "../components/CategoryChart";
 import FullCategoryBreakdown from "../components/FullCategoryBreakdown";
 import Recommendations from "../components/Recommendations";
-import { exportJsonReport, exportPdfReport } from "../api";
+import { exportJsonReport, exportPdfReport, generateRemediationPackage } from "../api";
 import { formatCategoryLabel } from "../utils/categoryLabels";
 
 const categoryLabels = {
@@ -71,6 +71,9 @@ function RunResults({ hasRun, onReportExported, onViewRecommendations, run, sett
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [exportMessage, setExportMessage] = useState("");
   const [exportError, setExportError] = useState("");
+  const [remediationPackage, setRemediationPackage] = useState(null);
+  const [remediationStatus, setRemediationStatus] = useState("");
+  const [remediationError, setRemediationError] = useState("");
   const summary = run?.summary || {};
   const evaluation = summary.evaluation || {};
   const majorEvaluation = summary.major_evaluation || evaluation;
@@ -128,6 +131,52 @@ function RunResults({ hasRun, onReportExported, onViewRecommendations, run, sett
     } finally {
       setIsExportingPdf(false);
     }
+  }
+
+  async function handleGenerateRemediation() {
+    if (!run?.run_id) {
+      return;
+    }
+
+    setRemediationStatus("Generating remediation brief...");
+    setRemediationError("");
+    try {
+      const result = await generateRemediationPackage(run.run_id, "markdown");
+      setRemediationPackage(result);
+      setRemediationStatus("Remediation brief generated.");
+    } catch (error) {
+      setRemediationError(error.message || "Unable to generate remediation brief.");
+      setRemediationStatus("");
+    }
+  }
+
+  async function handleCopyRemediation() {
+    if (!remediationPackage?.content) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(remediationPackage.content);
+      setRemediationStatus("Markdown copied to clipboard.");
+    } catch {
+      setRemediationError("Unable to copy markdown. You can still download the brief.");
+    }
+  }
+
+  function downloadRemediation(format) {
+    if (!run?.run_id) {
+      return;
+    }
+    const isJson = format === "json";
+    const content = isJson
+      ? JSON.stringify({ run_id: run.run_id, remediation_package: remediationPackage }, null, 2)
+      : remediationPackage?.content || "";
+    const blob = new Blob([content], { type: isJson ? "application/json" : "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `assurebench_remediation_${run.run_id}.${isJson ? "json" : "md"}`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -225,6 +274,42 @@ function RunResults({ hasRun, onReportExported, onViewRecommendations, run, sett
               variant="compact"
             />
           </div>
+          <section className="recommendations-panel remediation-panel" aria-labelledby="developer-remediation-title">
+            <div className="section-heading compact">
+              <div>
+                <p className="section-kicker">Developer Remediation</p>
+                <h2 id="developer-remediation-title">Developer Remediation</h2>
+                <p className="panel-copy">
+                  Generate a redacted Markdown brief for Codex, Cursor, GitHub Issues, Jira, Linear, or a developer ticket.
+                </p>
+              </div>
+            </div>
+            {!riskyTestCount ? (
+              <div className="empty-state">No remediation brief needed. This run has no risky tests.</div>
+            ) : (
+              <>
+                <div className="recommendation-actions export-actions">
+                  <button className="primary-button" onClick={handleGenerateRemediation} type="button">
+                    Generate Remediation Brief
+                  </button>
+                  <button className="secondary-button" disabled={!remediationPackage} onClick={handleCopyRemediation} type="button">
+                    Copy Markdown
+                  </button>
+                  <button className="secondary-button" disabled={!remediationPackage} onClick={() => downloadRemediation("json")} type="button">
+                    Download JSON
+                  </button>
+                  <button className="secondary-button" disabled={!remediationPackage} onClick={() => downloadRemediation("markdown")} type="button">
+                    Download Markdown
+                  </button>
+                </div>
+                {remediationStatus ? <p className="settings-message">{remediationStatus}</p> : null}
+                {remediationError ? <p className="error-message">{remediationError}</p> : null}
+                {remediationPackage ? (
+                  <pre className="remediation-preview">{remediationPackage.content.slice(0, 900)}</pre>
+                ) : null}
+              </>
+            )}
+          </section>
           <TestResultTable evaluation={evaluation} results={details} />
         </>
       )}

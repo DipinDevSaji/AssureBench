@@ -11,7 +11,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 DETAILED_MITIGATION_PLANS = {
@@ -547,6 +547,29 @@ def get_exported_report_path(filename: str, current_user: Optional[Dict] = None)
     return path
 
 
+def find_json_report_by_run_id(run_id: str, current_user: Optional[Dict] = None) -> Dict:
+    for path in _iter_report_paths_for_user(current_user):
+        if path.suffix.lower() != ".json":
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if str(data.get("run_id")) == str(run_id):
+            return data
+    raise FileNotFoundError(run_id)
+
+
+def find_latest_json_report(current_user: Optional[Dict] = None) -> Dict:
+    paths = [path for path in _iter_report_paths_for_user(current_user) if path.suffix.lower() == ".json"]
+    for path in sorted(paths, key=lambda item: item.stat().st_mtime, reverse=True):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+    raise FileNotFoundError("No JSON reports found")
+
+
 def delete_exported_report(filename: str, current_user: Optional[Dict] = None) -> Dict:
     path = get_exported_report_path(filename, current_user)
     path.unlink()
@@ -648,27 +671,58 @@ def export_pdf_report(run_result: Dict, current_user: Optional[Dict] = None) -> 
         ["Risky tests", str(risky_tests)],
         ["Pass rate", f"{pass_rate}%"],
     ]
+    external_analysis_note = None
     if summary.get("external_analysis"):
         external = summary["external_analysis"]
+        high_findings = int(external.get("high_findings", 0) or 0)
+        elevated_findings = int(external.get("elevated_findings", 0) or 0)
+        finding_counts = f"High: {high_findings} / Elevated: {elevated_findings}"
+        if high_findings == 0 and elevated_findings == 0:
+            external_analysis_note = "External analysis returned no high or elevated findings for this run."
         summary_rows.extend(
             [
                 ["External AI analysis", f"{external.get('provider', 'unknown')} ({external.get('analyzed_tests', 0)} tests)"],
-                ["External analysis findings", f"High: {external.get('high_findings', 0)} / Elevated: {external.get('elevated_findings', 0)}"],
+                ["External analysis finding counts", finding_counts],
             ]
         )
-    summary_table = Table(summary_rows, colWidths=[1.7 * inch, 5.0 * inch])
+
+    summary_label_style = ParagraphStyle(
+        "SummaryLabel",
+        parent=styles["BodyText"],
+        fontName="Helvetica-Bold",
+        fontSize=8.5,
+        leading=11,
+        wordWrap="CJK",
+    )
+    summary_value_style = ParagraphStyle(
+        "SummaryValue",
+        parent=styles["BodyText"],
+        fontSize=8.5,
+        leading=11,
+        wordWrap="CJK",
+    )
+    summary_table_rows = [
+        [Paragraph(str(label), summary_label_style), Paragraph(str(value), summary_value_style)]
+        for label, value in summary_rows
+    ]
+    summary_table = Table(summary_table_rows, colWidths=[2.35 * inch, 5.15 * inch], hAlign="LEFT")
     summary_table.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eef3f8")),
                 ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#c7d0dc")),
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("PADDING", (0, 0), (-1, -1), 6),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
             ]
         )
     )
-    story.extend([summary_table, Spacer(1, 16), Paragraph("Category Breakdown", styles["Heading2"])])
+    story.append(summary_table)
+    if external_analysis_note:
+        story.extend([Spacer(1, 6), Paragraph(external_analysis_note, styles["BodyText"])])
+    story.append(Spacer(1, 16))
 
     category_rows = [["Category", "Total", "Passed", "Risky", "Risk %"]]
     category_rows.extend(
@@ -695,10 +749,16 @@ def export_pdf_report(run_result: Dict, current_user: Optional[Dict] = None) -> 
             ]
         )
     )
-    story.extend([category_table, Spacer(1, 16), Paragraph("Recommendations", styles["Heading2"])])
+    story.extend(
+        [
+            KeepTogether([Paragraph("Category Breakdown", styles["Heading2"]), Spacer(1, 6), category_table]),
+            Spacer(1, 16),
+            Paragraph("Recommendations", styles["Heading2"]),
+        ]
+    )
 
     if recommendations:
-        for recommendation in recommendations:
+        for index, recommendation in enumerate(recommendations):
             story.append(Paragraph(str(recommendation.get("title") or recommendation.get("category")), styles["Heading3"]))
             for item in recommendation.get("items", []):
                 story.append(Paragraph(f"- {item}", styles["BodyText"]))
@@ -711,7 +771,8 @@ def export_pdf_report(run_result: Dict, current_user: Optional[Dict] = None) -> 
                         styles["BodyText"],
                     )
                 )
-            story.append(Spacer(1, 8))
+            if index < len(recommendations) - 1:
+                story.append(Spacer(1, 8))
     else:
         story.append(Paragraph("No category-specific recommendations were triggered.", styles["BodyText"]))
 

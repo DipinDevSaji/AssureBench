@@ -15,7 +15,7 @@ import Sidebar from "../components/Sidebar";
 import AccountSettings from "../pages/AccountSettings";
 import { testSuites } from "../data/testSuites";
 import App from "../App";
-import { changePassword, createAdminUser, deleteReport, fetchAnalysisConfig, fetchReports, loginUser, runAssurance, submitAccessRequest } from "../api";
+import { changePassword, createAdminUser, deleteReport, fetchAnalysisConfig, fetchReports, generateRemediationPackage, loginUser, runAssurance, submitAccessRequest } from "../api";
 
 vi.mock("../api", () => ({
   API_BASE: "http://127.0.0.1:8000",
@@ -45,11 +45,17 @@ vi.mock("../api", () => ({
       company_or_project: "AssureBench Pilot",
       intended_use: "Evaluate chatbot endpoints",
       expected_usage: "Weekly assurance runs",
+      message: "Please review my access request.",
       status: "pending",
       created_at: "2026-05-11T10:00:00Z",
     },
   ]),
   fetchAnalysisConfig: vi.fn(async () => ({ enabled: false, provider: "disabled", redact_pii: true })),
+  generateRemediationPackage: vi.fn(async () => ({
+    run_id: "run_20260511010101",
+    format: "markdown",
+    content: "# AssureBench Developer Remediation Brief\n\n## Summary\n\n## Validation Checklist",
+  })),
   fetchAdminUsers: vi.fn(async () => [
     {
       id: 1,
@@ -163,6 +169,12 @@ const run = {
 describe("dashboard pages", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
+    Object.defineProperty(window, "scrollTo", {
+      configurable: true,
+      value: vi.fn(),
+      writable: true,
+    });
     vi.clearAllMocks();
     loginUser.mockResolvedValue({
       access_token: "jwt-token",
@@ -171,12 +183,52 @@ describe("dashboard pages", () => {
     });
   });
 
+  test("switching pages resets dashboard scroll to the top", async () => {
+    const windowScrollTo = window.scrollTo;
+    const mainScrollTo = vi.fn();
+    const originalScrollTo = HTMLElement.prototype.scrollTo;
+    HTMLElement.prototype.scrollTo = mainScrollTo;
+    runAssurance.mockResolvedValueOnce(run);
+
+    render(<App />);
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "owner@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "owner-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+    await userEvent.click(await screen.findByText("New Run"));
+    await userEvent.click(screen.getByRole("button", { name: /Run Assurance Tests/i }));
+    await userEvent.click(screen.getByText("Results"));
+
+    windowScrollTo.mockClear();
+    mainScrollTo.mockClear();
+
+    await userEvent.click(screen.getByText("Test Suites"));
+
+    expect(await screen.findByRole("heading", { name: /Assurance Test Categories/i })).toBeInTheDocument();
+    expect(windowScrollTo).toHaveBeenCalledWith({ top: 0, left: 0 });
+    expect(mainScrollTo).toHaveBeenCalledWith({ top: 0, left: 0 });
+
+    HTMLElement.prototype.scrollTo = originalScrollTo;
+  });
+
   test("Login page renders", () => {
     render(<App />);
 
     expect(screen.getByRole("heading", { name: /Sign in to AssureBench/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Email/i)).toHaveValue("");
+    expect(screen.getByLabelText(/Password/i)).toHaveValue("");
+  });
+
+  test("login form does not persist credentials in browser storage", async () => {
+    render(<App />);
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "owner@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "owner-password");
+
+    expect(JSON.stringify(window.localStorage)).not.toContain("owner@example.com");
+    expect(JSON.stringify(window.localStorage)).not.toContain("owner-password");
+    expect(JSON.stringify(window.sessionStorage)).not.toContain("owner@example.com");
+    expect(JSON.stringify(window.sessionStorage)).not.toContain("owner-password");
   });
 
   test("login page shows product explanation", () => {
@@ -383,6 +435,54 @@ describe("dashboard pages", () => {
     expect(screen.queryByText(/run_owner_private/i)).not.toBeInTheDocument();
   });
 
+  test("custom endpoint state is cleared when switching users", async () => {
+    loginUser
+      .mockResolvedValueOnce({
+        access_token: "owner-token",
+        token_type: "bearer",
+        user: { id: 1, name: "Owner", email: "owner@example.com", role: "owner", force_password_change: false },
+      })
+      .mockResolvedValueOnce({
+        access_token: "user-token",
+        token_type: "bearer",
+        user: { id: 2, name: "Client One", email: "client1@example.com", role: "user", force_password_change: false },
+      });
+
+    render(<App />);
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "owner@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "owner-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+    await userEvent.click(await screen.findByText("New Run"));
+    const endpointInput = screen.getByLabelText(/Endpoint URL/i);
+    await userEvent.clear(endpointInput);
+    await userEvent.type(endpointInput, "https://owner-private.example.com/chat");
+    await userEvent.click(screen.getByRole("button", { name: /Logout/i }));
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "client1@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "temporary-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+    await userEvent.click(await screen.findByText("New Run"));
+
+    expect(screen.getByLabelText(/Endpoint URL/i)).toHaveValue("http://127.0.0.1:8000/demo-chatbot");
+    expect(screen.queryByDisplayValue("https://owner-private.example.com/chat")).not.toBeInTheDocument();
+  });
+
+  test("Test Suites catalog remains shared across users", () => {
+    render(
+      <TestSuites
+        configuredTestCount={30}
+        expandedSuite={null}
+        onToggleSuite={vi.fn()}
+        run={null}
+        testSuites={testSuites}
+      />,
+    );
+
+    expect(screen.getByText(/Each category contains built-in prompts used to evaluate chatbot risk behavior/i)).toBeInTheDocument();
+    expect(screen.getByText(/Prompt Injection/i)).toBeInTheDocument();
+  });
+
   test("logout returns to login", async () => {
     render(<App />);
 
@@ -393,6 +493,21 @@ describe("dashboard pages", () => {
     await userEvent.click(screen.getByRole("button", { name: /Logout/i }));
 
     expect(screen.getByRole("heading", { name: /Sign in to AssureBench/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Email/i)).toHaveValue("");
+    expect(screen.getByLabelText(/Password/i)).toHaveValue("");
+  });
+
+  test("switching users does not prefill the previous login credentials", async () => {
+    render(<App />);
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "owner@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "owner-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+    await screen.findByText("No completed run yet");
+    await userEvent.click(screen.getByRole("button", { name: /Logout/i }));
+
+    expect(screen.getByLabelText(/Email/i)).toHaveValue("");
+    expect(screen.getByLabelText(/Password/i)).toHaveValue("");
   });
 
   test("admin page is visible only to admin", async () => {
@@ -482,6 +597,48 @@ describe("dashboard pages", () => {
     expect(await screen.findByRole("heading", { name: "Access Requests" })).toBeInTheDocument();
     expect(await screen.findByText("Dipin Test")).toBeInTheDocument();
     expect(screen.getByText("dipin@example.com")).toBeInTheDocument();
+  });
+
+  test("admin access request details show submitted message", async () => {
+    render(<App />);
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "owner@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "owner-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+    await userEvent.click(await screen.findByText("Admin Users"));
+    await userEvent.click(await screen.findByRole("button", { name: /View details/i }));
+
+    const detailsPanel = screen.getByRole("region", { name: /Access request details for Dipin Test/i });
+    expect(detailsPanel).toBeInTheDocument();
+    expect(within(detailsPanel).getByText("Please review my access request.")).toBeInTheDocument();
+    expect(within(detailsPanel).getByText("AssureBench Pilot")).toBeInTheDocument();
+  });
+
+  test("admin access request details show empty-message fallback", async () => {
+    const { fetchAccessRequests } = await import("../api");
+    fetchAccessRequests.mockResolvedValueOnce([
+      {
+        id: 2,
+        full_name: "No Note",
+        email: "nonote@example.com",
+        company_or_project: "",
+        intended_use: "Evaluate chatbot endpoints",
+        expected_usage: "Monthly runs",
+        message: "",
+        status: "pending",
+        created_at: "2026-05-11T11:00:00Z",
+      },
+    ]);
+
+    render(<App />);
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "owner@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "owner-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+    await userEvent.click(await screen.findByText("Admin Users"));
+    await userEvent.click(await screen.findByRole("button", { name: /View details/i }));
+
+    expect(screen.getByText("No message provided.")).toBeInTheDocument();
   });
 
   test("user management page shows role badges", async () => {
@@ -696,7 +853,49 @@ describe("dashboard pages", () => {
     expect(screen.getByText(/Download this run as JSON or PDF for review and documentation/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Export JSON Report/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Export PDF Report/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Developer Remediation/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Generate Remediation Brief/i })).toBeInTheDocument();
     expect(screen.queryByText(/"response":/i)).not.toBeInTheDocument();
+  });
+
+  test("Developer Remediation controls render after package generation", async () => {
+    render(
+      <RunResults
+        hasRun
+        onReportExported={vi.fn()}
+        onViewRecommendations={vi.fn()}
+        run={run}
+        settings={{ enableJsonExport: true, enablePdfExport: true }}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /Generate Remediation Brief/i }));
+
+    expect(generateRemediationPackage).toHaveBeenCalledWith("run_test", "markdown");
+    expect(await screen.findByText(/Remediation brief generated/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Copy Markdown/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Download JSON/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Download Markdown/i })).toBeEnabled();
+  });
+
+  test("no-risk run shows no remediation needed", () => {
+    const safeRun = {
+      ...run,
+      details: run.details.map((item) => ({ ...item, risk_score: 0, risky: false })),
+      summary: { ...run.summary, evaluation: {}, risk_score: 0, risk_level: "low" },
+    };
+
+    render(
+      <RunResults
+        hasRun
+        onReportExported={vi.fn()}
+        onViewRecommendations={vi.fn()}
+        run={safeRun}
+        settings={{ enableJsonExport: true, enablePdfExport: true }}
+      />,
+    );
+
+    expect(screen.getByText(/No remediation brief needed. This run has no risky tests./i)).toBeInTheDocument();
   });
 
   test("Results mitigation summary opens detailed recommendations", async () => {
@@ -892,6 +1091,8 @@ describe("dashboard pages", () => {
     expect(screen.getByRole("heading", { name: /Security/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /External AI analysis/i })).toBeInTheDocument();
     expect(screen.getByText("openai")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Developer Remediation Integrations/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/Manual copy\/paste supported/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Public account creation")).toBeInTheDocument();
     expect(screen.getByText("Disabled")).toBeInTheDocument();
     expect(screen.getByLabelText(/Built-in Demo Chatbot/i)).toHaveValue("http://127.0.0.1:8000/demo-chatbot");

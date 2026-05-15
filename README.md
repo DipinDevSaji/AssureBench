@@ -342,6 +342,28 @@ Before sending data to a provider, AssureBench can redact emails, phone numbers,
 
 Future production improvements should include organization-level provider settings, per-workspace provider keys, explicit consent controls, audit logs, stronger PII detection, and Postgres-backed analysis history.
 
+## Developer Remediation Workflow
+
+AssureBench can generate developer remediation briefs from risky assurance run findings. This is separate from external AI analysis and does not call Codex, Cursor, GitHub, Jira, Linear, or webhooks automatically.
+
+The remediation brief can be generated as Markdown or JSON and includes:
+
+- run summary and risk level
+- risky categories
+- failed or risky tests
+- redacted prompts and response summaries
+- expected behavior
+- recommended mitigations
+- developer action items
+- validation checklist
+- a ready-to-copy developer prompt
+
+Developers can paste the Markdown brief into Codex, Cursor, GitHub Issues, Jira, Linear, or an internal ticket. No automatic code changes are made, and human review is required before applying fixes.
+
+The backend enforces report/run ownership. Normal users can generate remediation briefs only for their own latest run or own exported reports. Owner/admin accounts can use their allowed report visibility. Remediation output reuses the backend redaction logic to avoid including raw emails, phone numbers, bearer tokens, API keys, secrets, or password-looking values.
+
+Future work may add direct GitHub Issues, Jira, Linear, or webhook integrations with explicit user consent and audit logging.
+
 ## How to Run Frontend
 
 Open a second terminal:

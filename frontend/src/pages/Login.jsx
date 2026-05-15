@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { submitAccessRequest } from "../api";
 import BrandHeader from "../components/BrandHeader";
 
@@ -220,11 +220,11 @@ function Login({ error, isLoading, onLogin }) {
           <h1 id="login-title">Sign in to AssureBench</h1>
           <p className="login-helper-text">Already approved? Sign in with your email and password.</p>
 
-          <form className="login-form" onSubmit={handleSubmit}>
+          <form autoComplete="off" className="login-form" onSubmit={handleSubmit}>
             <label htmlFor="login-email">Email</label>
             <input
               id="login-email"
-              autoComplete="email"
+              autoComplete="username"
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}

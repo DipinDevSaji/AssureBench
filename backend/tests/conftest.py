@@ -1,6 +1,6 @@
 import pytest
 
-from app import auth, rate_limiter
+from app import auth, main, rate_limiter
 
 
 @pytest.fixture(autouse=True)
@@ -14,8 +14,10 @@ def isolated_test_state(tmp_path, monkeypatch):
     monkeypatch.setenv("ASSUREBENCH_EXTERNAL_ANALYSIS_ENABLED", "false")
     monkeypatch.setenv("ASSUREBENCH_ANALYSIS_PROVIDER", "disabled")
     auth.initialize_auth_storage()
+    main.LATEST_RUNS_BY_USER.clear()
     rate_limiter.reset_rate_limits()
     yield
+    main.LATEST_RUNS_BY_USER.clear()
     rate_limiter.reset_rate_limits()
 
 
