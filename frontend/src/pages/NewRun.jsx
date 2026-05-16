@@ -55,7 +55,7 @@ function NewRun({ demoTargets = [], endpointUrl, error, isRunning, onEndpointCha
                 type="button"
               >
                 <span>{target.title}</span>
-                <strong>{target.endpoint.replace(/^https?:\/\//, "")}</strong>
+                <strong>{target.endpoint}</strong>
                 <em>{target.note}</em>
               </button>
             ))}

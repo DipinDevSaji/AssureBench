@@ -45,6 +45,7 @@ function AdminUsers({ currentUser }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "user" });
+  const [resetPasswords, setResetPasswords] = useState({});
   const canCreateAdmin = currentUser?.role === "owner";
   const selectedAccessRequest = accessRequests.find((request) => request.id === selectedAccessRequestId);
 
@@ -101,6 +102,20 @@ function AdminUsers({ currentUser }) {
       await loadUsers();
     } catch (err) {
       setError(err.message || "Unable to reactivate user.");
+    }
+  }
+
+  async function handleResetPassword(userId) {
+    const password = resetPasswords[userId] || "";
+    setMessage("");
+    setError("");
+    try {
+      await updateAdminUser(userId, { password });
+      setResetPasswords((current) => ({ ...current, [userId]: "" }));
+      setMessage("Temporary password updated.");
+      await loadUsers();
+    } catch (err) {
+      setError(err.message || "Unable to reset password.");
     }
   }
 
@@ -187,7 +202,8 @@ function AdminUsers({ currentUser }) {
               <th>Role</th>
               <th>Status</th>
               <th>Created</th>
-              <th>Action</th>
+              <th>Account action</th>
+              <th>Password reset</th>
             </tr>
           </thead>
           <tbody>
@@ -219,6 +235,34 @@ function AdminUsers({ currentUser }) {
                     >
                       Reactivate
                     </button>
+                  ) : (
+                    <span className="protected-account-note">{getProtectedReason(currentUser, user)}</span>
+                  )}
+                </td>
+                <td>
+                  {canToggleUser(currentUser, user) ? (
+                    <div className="admin-password-reset">
+                      <label className="sr-only" htmlFor={`reset-password-${user.id}`}>
+                        New temporary password for {user.name}
+                      </label>
+                      <input
+                        id={`reset-password-${user.id}`}
+                        type="password"
+                        value={resetPasswords[user.id] || ""}
+                        onChange={(event) =>
+                          setResetPasswords((current) => ({ ...current, [user.id]: event.target.value }))
+                        }
+                        placeholder="New temporary password"
+                      />
+                      <button
+                        className="secondary-button"
+                        disabled={!(resetPasswords[user.id] || "").trim()}
+                        onClick={() => handleResetPassword(user.id)}
+                        type="button"
+                      >
+                        Reset password
+                      </button>
+                    </div>
                   ) : (
                     <span className="protected-account-note">{getProtectedReason(currentUser, user)}</span>
                   )}

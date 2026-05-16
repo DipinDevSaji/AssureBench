@@ -797,21 +797,21 @@ describe("dashboard pages", () => {
         demoTargets={[
           {
             title: "Built-in Demo",
-            endpoint: "http://127.0.0.1:8000/demo-chatbot",
+            endpoint: "https://dds369-assurebench.hf.space/demo-chatbot",
             note: "Baseline demo endpoint.",
           },
           {
             title: "Safe Demo",
-            endpoint: "http://127.0.0.1:8000/safe-demo-chatbot",
+            endpoint: "https://dds369-assurebench.hf.space/safe-demo-chatbot",
             note: "Mostly safe responses.",
           },
           {
             title: "Risky Demo sample",
-            endpoint: "http://127.0.0.1:8000/risky-demo-chatbot",
+            endpoint: "https://dds369-assurebench.hf.space/risky-demo-chatbot",
             note: "Risky responses.",
           },
         ]}
-        endpointUrl="http://127.0.0.1:8000/demo-chatbot"
+        endpointUrl="https://dds369-assurebench.hf.space/demo-chatbot"
         error=""
         isRunning={false}
         onEndpointChange={onEndpointChange}
@@ -823,10 +823,25 @@ describe("dashboard pages", () => {
     expect(screen.getByRole("heading", { name: /Try sample demo targets/i })).toBeInTheDocument();
     expect(screen.getByText(/Use these sample endpoints to understand how AssureBench scores safe, baseline, and risky chatbot behavior/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Risky Demo sample/i })).toBeInTheDocument();
+    expect(screen.getByText("https://dds369-assurebench.hf.space/demo-chatbot")).toBeInTheDocument();
+    expect(screen.getByText("https://dds369-assurebench.hf.space/safe-demo-chatbot")).toBeInTheDocument();
+    expect(screen.getByText("https://dds369-assurebench.hf.space/risky-demo-chatbot")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /Safe Demo/i }));
 
-    expect(onEndpointChange).toHaveBeenCalledWith("http://127.0.0.1:8000/safe-demo-chatbot");
+    expect(onEndpointChange).toHaveBeenCalledWith("https://dds369-assurebench.hf.space/safe-demo-chatbot");
+  });
+
+  test("forgot password message appears", async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole("button", { name: /Forgot password/i }));
+
+    expect(
+      screen.getByText(
+        /Password resets are handled by the workspace owner\/admin\. Please contact the administrator who approved your access\./i,
+      ),
+    ).toBeInTheDocument();
   });
 
   test("Results page renders run summary when data exists", () => {
@@ -1173,10 +1188,39 @@ describe("dashboard pages", () => {
     await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
     await userEvent.click(await screen.findByText("Admin Users"));
 
-    expect(await screen.findByText("Cannot deactivate current owner")).toBeInTheDocument();
+    expect((await screen.findAllByText("Cannot deactivate current owner")).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /Deactivate/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Reactivate/i })).toBeInTheDocument();
     expect(screen.getByText("Inactive")).toHaveClass("status-badge");
+  });
+
+  test("Admin Users password reset UI is visible to owner and hidden for protected owner", async () => {
+    render(<App />);
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "owner@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "owner-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+    await userEvent.click(await screen.findByText("Admin Users"));
+
+    expect(screen.getByLabelText(/New temporary password for Inactive Customer/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Reset password/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText(/New temporary password for Owner/i)).not.toBeInTheDocument();
+  });
+
+  test("normal users cannot open Admin Users reset UI", async () => {
+    loginUser.mockResolvedValueOnce({
+      access_token: "user-token",
+      token_type: "bearer",
+      user: { id: 9, name: "Client One", email: "client1@example.com", role: "user", force_password_change: false },
+    });
+    render(<App />);
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "client1@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "temporary-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+
+    expect(screen.queryByText("Admin Users")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Reset password/i })).not.toBeInTheDocument();
   });
 
   test("Recommendations page renders mitigation cards", () => {

@@ -409,6 +409,8 @@ def update_user_as_actor(
     if target["id"] == actor.get("id") and role is not None and role != target_role:
         raise PermissionError("Users cannot modify their own role")
     if actor_role == "owner":
+        if target["id"] == actor.get("id") and password is not None:
+            raise PermissionError("Use account settings to change the currently logged-in owner's password")
         if target["id"] == actor.get("id") and is_active is False:
             raise PermissionError("Cannot deactivate the currently logged-in owner")
         if target_role == "owner" and is_active is False and _active_owner_count() <= 1:
@@ -423,6 +425,8 @@ def update_user_as_actor(
             force_password_change=True if password else None,
         )
     if actor_role == "admin":
+        if target["id"] == actor.get("id") and password is not None:
+            raise PermissionError("Use account settings to change your own password")
         if target_role in {"owner", "admin"}:
             raise PermissionError("Admins can only manage normal user accounts")
         if role not in {None, "user"}:

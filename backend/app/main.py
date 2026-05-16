@@ -112,6 +112,16 @@ class UserUpdateRequest(BaseModel):
     is_active: Optional[bool] = None
     password: Optional[str] = None
 
+    @field_validator("password")
+    @classmethod
+    def updated_password_required_when_present(cls, value):
+        if value is None:
+            return value
+        value = str(value)
+        if not value.strip():
+            raise ValueError("Password cannot be blank")
+        return value
+
 class AccessRequestCreate(BaseModel):
     full_name: str
     email: str

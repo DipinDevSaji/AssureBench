@@ -5,6 +5,7 @@ import BrandHeader from "../components/BrandHeader";
 function Login({ error, isLoading, onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showForgotPasswordMessage, setShowForgotPasswordMessage] = useState(false);
   const [showAccessRequest, setShowAccessRequest] = useState(false);
   const [requestForm, setRequestForm] = useState({
     full_name: "",
@@ -243,6 +244,20 @@ function Login({ error, isLoading, onLogin }) {
               {isLoading ? "Signing in..." : "Sign in"}
             </button>
           </form>
+
+          <button
+            className="text-button forgot-password-link"
+            onClick={() => setShowForgotPasswordMessage(true)}
+            type="button"
+          >
+            Forgot password?
+          </button>
+
+          {showForgotPasswordMessage ? (
+            <p className="login-helper-text">
+              Password resets are handled by the workspace owner/admin. Please contact the administrator who approved your access.
+            </p>
+          ) : null}
 
           {error ? <p className="error-message">{error}</p> : null}
 

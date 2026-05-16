@@ -203,6 +203,7 @@ def test_owner_can_list_admin_users(admin_headers):
 
     assert response.status_code == 200
     assert response.json()["users"][0]["role"] == "owner"
+    assert all("password_hash" not in user for user in response.json()["users"])
 
 
 def test_owner_can_create_user(admin_headers):
@@ -221,6 +222,81 @@ def test_owner_can_create_user(admin_headers):
     assert payload["role"] == "user"
     assert payload["force_password_change"] is True
     assert "password_hash" not in payload
+
+
+def test_owner_can_reset_another_users_password(admin_headers):
+    user = auth.create_user("Reset User", "reset-user@example.com", "temporary-password", "user")
+
+    response = asyncio.run(
+        _request(
+            "patch",
+            f"/admin/users/{user['id']}",
+            headers=admin_headers,
+            json={"password": "new-temporary-password"},
+        )
+    )
+
+    assert response.status_code == 200
+    assert response.json()["force_password_change"] is True
+    assert "password_hash" not in response.json()
+
+
+def test_admin_can_reset_another_users_password():
+    admin_headers, _ = _token_for_user("Trusted Admin", "reset-admin@example.com", "admin")
+    user = auth.create_user("Reset User", "admin-reset-user@example.com", "temporary-password", "user")
+
+    response = asyncio.run(
+        _request(
+            "patch",
+            f"/admin/users/{user['id']}",
+            headers=admin_headers,
+            json={"password": "new-temporary-password"},
+        )
+    )
+
+    assert response.status_code == 200
+    assert response.json()["force_password_change"] is True
+    assert "password_hash" not in response.json()
+
+
+def test_reset_password_works_for_login(admin_headers):
+    user = auth.create_user("Reset Login User", "reset-login@example.com", "temporary-password", "user")
+
+    reset_response = asyncio.run(
+        _request(
+            "patch",
+            f"/admin/users/{user['id']}",
+            headers=admin_headers,
+            json={"password": "new-temporary-password"},
+        )
+    )
+    login_response = asyncio.run(
+        _request(
+            "post",
+            "/auth/login",
+            json={"email": "reset-login@example.com", "password": "new-temporary-password"},
+        )
+    )
+
+    assert reset_response.status_code == 200
+    assert login_response.status_code == 200
+    assert login_response.json()["user"]["force_password_change"] is True
+
+
+def test_current_owner_cannot_reset_own_password_from_admin_api(admin_headers):
+    owner = auth.authenticate_user("owner@example.com", "owner-password")
+
+    response = asyncio.run(
+        _request(
+            "patch",
+            f"/admin/users/{owner['id']}",
+            headers=admin_headers,
+            json={"password": "new-owner-password"},
+        )
+    )
+
+    assert response.status_code == 403
+    assert "account settings" in response.json()["detail"].lower()
 
 
 def test_user_can_change_own_password_with_correct_current_password():
@@ -417,11 +493,15 @@ def test_user_cannot_manage_accounts_or_access_requests():
     reactivate_response = asyncio.run(
         _request("patch", f"/admin/users/{user['id']}", headers=user_headers, json={"is_active": True})
     )
+    reset_response = asyncio.run(
+        _request("patch", f"/admin/users/{user['id']}", headers=user_headers, json={"password": "new-password"})
+    )
     access_requests_response = asyncio.run(_request("get", "/admin/access-requests", headers=user_headers))
 
     assert create_response.status_code == 403
     assert deactivate_response.status_code == 403
     assert reactivate_response.status_code == 403
+    assert reset_response.status_code == 403
     assert access_requests_response.status_code == 403
 
 
