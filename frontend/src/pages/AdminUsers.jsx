@@ -37,6 +37,13 @@ function getProtectedReason(currentUser, targetUser) {
   return "Protected account";
 }
 
+function getPasswordResetProtectedReason(currentUser, targetUser) {
+  if (targetUser.role === "owner" && targetUser.id === currentUser?.id) {
+    return "Use Account Settings";
+  }
+  return getProtectedReason(currentUser, targetUser);
+}
+
 function AdminUsers({ currentUser }) {
   const [users, setUsers] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
@@ -264,7 +271,7 @@ function AdminUsers({ currentUser }) {
                       </button>
                     </div>
                   ) : (
-                    <span className="protected-account-note">{getProtectedReason(currentUser, user)}</span>
+                    <span className="protected-account-note">{getPasswordResetProtectedReason(currentUser, user)}</span>
                   )}
                 </td>
               </tr>

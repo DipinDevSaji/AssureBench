@@ -1188,7 +1188,8 @@ describe("dashboard pages", () => {
     await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
     await userEvent.click(await screen.findByText("Admin Users"));
 
-    expect((await screen.findAllByText("Cannot deactivate current owner")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Cannot deactivate current owner")).toBeInTheDocument();
+    expect(screen.getByText("Use Account Settings")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Deactivate/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Reactivate/i })).toBeInTheDocument();
     expect(screen.getByText("Inactive")).toHaveClass("status-badge");
