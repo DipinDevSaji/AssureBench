@@ -2971,7 +2971,7 @@ tbody tr:hover {
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 768px) {
   .app-shell {
     grid-template-columns: 1fr;
   }

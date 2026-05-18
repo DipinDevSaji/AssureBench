@@ -339,7 +339,7 @@ describe("dashboard pages", () => {
       />,
     );
 
-    const menuButton = screen.getByRole("button", { name: /Menu/i });
+    const menuButton = await screen.findByRole("button", { name: /Menu/i });
     expect(menuButton).toHaveAttribute("aria-expanded", "false");
 
     await userEvent.click(menuButton);
@@ -349,6 +349,31 @@ describe("dashboard pages", () => {
 
     expect(onNavigate).toHaveBeenCalledWith("Results");
     expect(screen.getByRole("button", { name: /Menu/i })).toHaveAttribute("aria-expanded", "false");
+
+    window.matchMedia = originalMatchMedia;
+  });
+
+  test("desktop sidebar does not show a mobile menu button", () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+
+    render(
+      <Sidebar
+        activeNav="Overview"
+        onLogout={vi.fn()}
+        onNavigate={vi.fn()}
+        projects={["Demo Chatbot", "Production Endpoint", "Uploaded Results"]}
+        user={{ email: "owner@example.com", role: "owner" }}
+        workspaceNav={["Overview", "New Run", "Results"]}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /Menu/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: /Workspace/i })).toBeInTheDocument();
 
     window.matchMedia = originalMatchMedia;
   });

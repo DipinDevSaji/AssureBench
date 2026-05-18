@@ -11,12 +11,14 @@ const navLabels = {
   "Uploaded Results": "Import Results",
 };
 
+const MOBILE_NAV_QUERY = "(max-width: 768px)";
+
 function Sidebar({ activeNav, onLogout, onNavigate, projects, user, workspaceNav }) {
   const [isMobile, setIsMobile] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia?.("(max-width: 960px)");
+    const mediaQuery = window.matchMedia?.(MOBILE_NAV_QUERY);
     if (!mediaQuery) {
       return undefined;
     }
@@ -49,19 +51,21 @@ function Sidebar({ activeNav, onLogout, onNavigate, projects, user, workspaceNav
           <h2>AssureBench</h2>
           <p>AI assurance workspace</p>
         </div>
-        <button
-          aria-controls="mobile-navigation-menu"
-          aria-expanded={isMenuOpen}
-          className="secondary-button mobile-menu-toggle"
-          onClick={() => setIsMenuOpen((current) => !current)}
-          type="button"
-        >
-          {isMenuOpen ? "Close" : "Menu"}
-        </button>
+        {isMobile ? (
+          <button
+            aria-controls="mobile-navigation-menu"
+            aria-expanded={isMenuOpen}
+            className="secondary-button mobile-menu-toggle"
+            onClick={() => setIsMenuOpen((current) => !current)}
+            type="button"
+          >
+            {isMenuOpen ? "Close" : "Menu"}
+          </button>
+        ) : null}
       </div>
 
       <div
-        className={isMenuOpen ? "sidebar-menu open" : "sidebar-menu"}
+        className={isMobile && isMenuOpen ? "sidebar-menu open" : "sidebar-menu"}
         id="mobile-navigation-menu"
       >
         <nav className="sidebar-section" aria-label="Workspace">
