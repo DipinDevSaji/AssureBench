@@ -1,10 +1,10 @@
 import React from "react";
 
-function NewRun({ demoTargets = [], endpointUrl, error, isRunning, onEndpointChange, onRun, status }) {
+function NewRun({ demoTargets = [], endpointUrl, error, isRunning, onEndpointChange, onRun, onViewResults, status }) {
   const statusText = {
     idle: "Ready to test your chatbot endpoint.",
     running: "Running assurance tests...",
-    complete: "Run complete. Results are shown below.",
+    complete: "Run complete. Open Results to review the latest run.",
     error: "Run failed. Check the endpoint and backend server.",
   }[status];
 
@@ -31,7 +31,14 @@ function NewRun({ demoTargets = [], endpointUrl, error, isRunning, onEndpointCha
               {isRunning ? "Running..." : "Run Assurance Tests"}
             </button>
           </div>
-          <span className={`status-text endpoint-status status-${status}`}>{statusText}</span>
+          <div className="endpoint-status-row">
+            <span className={`status-text endpoint-status status-${status}`}>{statusText}</span>
+            {status === "complete" ? (
+              <button className="secondary-button" onClick={onViewResults} type="button">
+                View Results
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 

@@ -159,6 +159,7 @@ function AppRouter({
         isRunning={status === "running"}
         onEndpointChange={setEndpointUrl}
         onRun={handleRun}
+        onViewResults={() => setActiveNav("Results")}
         status={status}
       />
     );

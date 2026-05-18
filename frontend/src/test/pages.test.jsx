@@ -319,6 +319,40 @@ describe("dashboard pages", () => {
     expect(within(testingModes).queryByText("Production Endpoint")).not.toBeInTheDocument();
   });
 
+  test("mobile sidebar menu toggles and closes after navigation", async () => {
+    const onNavigate = vi.fn();
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+
+    render(
+      <Sidebar
+        activeNav="Overview"
+        onLogout={vi.fn()}
+        onNavigate={onNavigate}
+        projects={["Demo Chatbot", "Production Endpoint", "Uploaded Results"]}
+        user={{ email: "owner@example.com", role: "owner" }}
+        workspaceNav={["Overview", "New Run", "Results"]}
+      />,
+    );
+
+    const menuButton = screen.getByRole("button", { name: /Menu/i });
+    expect(menuButton).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(menuButton);
+    expect(screen.getByRole("button", { name: /Close/i })).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(screen.getByText("Results"));
+
+    expect(onNavigate).toHaveBeenCalledWith("Results");
+    expect(screen.getByRole("button", { name: /Menu/i })).toHaveAttribute("aria-expanded", "false");
+
+    window.matchMedia = originalMatchMedia;
+  });
+
   test("Request Access form renders", async () => {
     render(<App />);
 
@@ -790,6 +824,27 @@ describe("dashboard pages", () => {
     expect(screen.getByText("Ready to test your chatbot endpoint.")).toHaveClass("endpoint-status");
   });
 
+  test("New Run completion state offers Results navigation", async () => {
+    const onViewResults = vi.fn();
+    render(
+      <NewRun
+        endpointUrl="http://127.0.0.1:8000/demo-chatbot"
+        error=""
+        isRunning={false}
+        onEndpointChange={vi.fn()}
+        onRun={vi.fn()}
+        onViewResults={onViewResults}
+        status="complete"
+      />,
+    );
+
+    expect(screen.getByText("Run complete. Open Results to review the latest run.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /View Results/i }));
+
+    expect(onViewResults).toHaveBeenCalledTimes(1);
+  });
+
   test("New Run demo target selector fills endpoint input", async () => {
     const onEndpointChange = vi.fn();
     render(
@@ -842,6 +897,21 @@ describe("dashboard pages", () => {
         /Password resets are handled by the workspace owner\/admin\. Please contact the administrator who approved your access\./i,
       ),
     ).toBeInTheDocument();
+  });
+
+  test("View Results from New Run opens the Results page", async () => {
+    runAssurance.mockResolvedValueOnce(run);
+    render(<App />);
+
+    await userEvent.type(screen.getByLabelText(/Email/i), "owner@example.com");
+    await userEvent.type(screen.getByLabelText(/Password/i), "owner-password");
+    await userEvent.click(screen.getByRole("button", { name: /Sign in/i }));
+    await userEvent.click(await screen.findByText("New Run"));
+    await userEvent.click(screen.getByRole("button", { name: /Run Assurance Tests/i }));
+
+    await userEvent.click(await screen.findByRole("button", { name: /View Results/i }));
+
+    expect(await screen.findByRole("heading", { name: /Run Summary/i })).toBeInTheDocument();
   });
 
   test("Results page renders run summary when data exists", () => {
